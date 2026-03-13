@@ -1,40 +1,43 @@
-# Oursky PM Pre-test — Todo App
+# Daily Top-3 Todo App
 
-Simple todo app (add / complete / delete) + one thoughtful custom feature that improves daily work organization.
-
-## Status
-Scaffold + requirements extracted. Implementation pending.
-
-## Tech stack (planned)
-- React + TypeScript (Vite)
-- Local persistence (LocalStorage)
-- Deployed on Vercel
+A minimalist todo app with intelligent daily prioritization.
 
 ## Features
-### Base
-- Add tasks
-- Complete tasks
-- Delete tasks
+- ✅ Add, complete, and delete tasks
+- ⭐ Mark up to 3 tasks as daily priorities
+- 🔄 Auto-rollover unfinished priorities to the next day
+- 💾 Persistent storage with localStorage
+- 📱 Fully responsive, mobile-first interface
+- ⌨️ Keyboard-friendly input flow (Enter to add, Escape to clear)
 
-### Custom feature
-- TBD (see `TASK.md` for candidate ideas)
+## Custom Feature: Daily Top-3 + Auto-Rollover
 
-## Setup (placeholder)
+A long task list tells you *everything* you could do, but not what matters most today. This app adds a lightweight planning layer on top of a normal todo list:
+
+- Choose up to three tasks as **Today’s Top 3**
+- Keep those priorities visually separate from the rest of the backlog
+- When a new day starts, unfinished priorities become **rollover suggestions**
+- Restore them into today’s Top 3 with one click if they still deserve attention
+
+The result is a simple workflow that encourages daily focus without requiring a complex productivity system.
+
+## Tech Stack
+- React + TypeScript
+- Vite
+- Tailwind CSS
+- localStorage
+
+## Setup
 ```bash
-# install
 npm install
-
-# run
 npm run dev
-
-# test
-npm test
-
-# build
-npm run build
 ```
 
-## Deliverables (per pre-test)
-- Live URL (Vercel or similar)
-- Public GitHub repo with incremental commits
-- Short writeup (≤ half page)
+## Build
+```bash
+npm run build
+npm run lint
+```
+
+## Live Demo
+Vercel deployment was attempted during this build session, but no production URL is available in the repo yet. Run `npx vercel --prod` in the project directory to publish once Vercel auth/project setup is available.
