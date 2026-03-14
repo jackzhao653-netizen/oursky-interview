@@ -1917,7 +1917,7 @@ function App() {
                 </div>
 
                 {(draft.recurrence === "weekly" || draft.recurrence === "monthly") && (
-                  <div className="field-group">
+                  <div className="recurrence-options-wrapper">
                     <span>Recurrence Options</span>
                     <div className="recurrence-options">
                       <label className="recurrence-option">

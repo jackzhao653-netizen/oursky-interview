@@ -1478,6 +1478,18 @@ label {
   margin-top: 0.5rem;
 }
 
+.recurrence-options-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.recurrence-options-wrapper > span {
+  font-size: 0.84rem;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+}
+
 .recurrence-option {
   display: flex;
   align-items: center;
