@@ -4,6 +4,7 @@ import {
   type FormEvent,
   type MouseEvent as ReactMouseEvent,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -61,11 +62,30 @@ type QuickAddState = {
   priority: PriorityLevel;
 };
 
+type TooltipSide = "left" | "right" | "top" | "bottom";
+
+type TooltipRect = {
+  top: number;
+  left: number;
+  right: number;
+  bottom: number;
+  width: number;
+  height: number;
+};
+
 type WeekTooltipState = {
   event: ResolvedTodoEvent;
-  dayKey: string;
-  side: "left" | "right";
+  side: TooltipSide;
   top: number;
+  left: number;
+  arrowOffset: number;
+  triggerRect: TooltipRect;
+  preferredSide: "left" | "right";
+};
+
+type TooltipSize = {
+  width: number;
+  height: number;
 };
 
 const DEFAULT_FILTERS: TodoFilters = {
@@ -77,6 +97,10 @@ const DEFAULT_FILTERS: TodoFilters = {
 };
 
 const THEME_STORAGE_KEY = "oursky-todo-theme";
+const MOBILE_TOOLTIP_BREAKPOINT = 720;
+const TOOLTIP_EDGE_PADDING = 16;
+const TOOLTIP_GAP = 12;
+const TOOLTIP_MAX_WIDTH = 260;
 
 const CATEGORY_META: Record<
   string,
@@ -260,6 +284,131 @@ function loadStoredTheme(): ThemeMode {
     : "dark";
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function getTooltipWidth(viewportWidth: number) {
+  return Math.min(
+    TOOLTIP_MAX_WIDTH,
+    Math.max(180, viewportWidth - TOOLTIP_EDGE_PADDING * 2),
+  );
+}
+
+function getTooltipPlacement(
+  triggerRect: TooltipRect,
+  tooltipSize: TooltipSize,
+  preferredSide: "left" | "right",
+) {
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const maxLeft = Math.max(
+    TOOLTIP_EDGE_PADDING,
+    viewportWidth - TOOLTIP_EDGE_PADDING - tooltipSize.width,
+  );
+  const maxTop = Math.max(
+    TOOLTIP_EDGE_PADDING,
+    viewportHeight - TOOLTIP_EDGE_PADDING - tooltipSize.height,
+  );
+  const centerX = triggerRect.left + triggerRect.width / 2;
+  const centerY = triggerRect.top + triggerRect.height / 2;
+  const canPlaceRight =
+    triggerRect.right + TOOLTIP_GAP + tooltipSize.width <=
+    viewportWidth - TOOLTIP_EDGE_PADDING;
+  const canPlaceLeft =
+    triggerRect.left - TOOLTIP_GAP - tooltipSize.width >= TOOLTIP_EDGE_PADDING;
+  const canPlaceBottom =
+    triggerRect.bottom + TOOLTIP_GAP + tooltipSize.height <=
+    viewportHeight - TOOLTIP_EDGE_PADDING;
+  const canPlaceTop =
+    triggerRect.top - TOOLTIP_GAP - tooltipSize.height >= TOOLTIP_EDGE_PADDING;
+  const prefersVertical = viewportWidth < MOBILE_TOOLTIP_BREAKPOINT;
+
+  let side: TooltipSide;
+
+  if (prefersVertical) {
+    if (canPlaceBottom || !canPlaceTop) {
+      side = "bottom";
+    } else {
+      side = "top";
+    }
+  } else if (
+    preferredSide === "right" &&
+    (canPlaceRight || !canPlaceLeft)
+  ) {
+    side = canPlaceRight ? "right" : canPlaceBottom || !canPlaceTop ? "bottom" : "top";
+  } else if (
+    preferredSide === "left" &&
+    (canPlaceLeft || !canPlaceRight)
+  ) {
+    side = canPlaceLeft ? "left" : canPlaceBottom || !canPlaceTop ? "bottom" : "top";
+  } else if (canPlaceRight) {
+    side = "right";
+  } else if (canPlaceLeft) {
+    side = "left";
+  } else if (canPlaceBottom || !canPlaceTop) {
+    side = "bottom";
+  } else {
+    side = "top";
+  }
+
+  let left = TOOLTIP_EDGE_PADDING;
+  let top = TOOLTIP_EDGE_PADDING;
+  let arrowOffset = 0;
+
+  if (side === "right") {
+    left = clamp(
+      triggerRect.right + TOOLTIP_GAP,
+      TOOLTIP_EDGE_PADDING,
+      maxLeft,
+    );
+    top = clamp(
+      centerY - tooltipSize.height / 2,
+      TOOLTIP_EDGE_PADDING,
+      maxTop,
+    );
+    arrowOffset = clamp(centerY - top, 18, tooltipSize.height - 18);
+  } else if (side === "left") {
+    left = clamp(
+      triggerRect.left - TOOLTIP_GAP - tooltipSize.width,
+      TOOLTIP_EDGE_PADDING,
+      maxLeft,
+    );
+    top = clamp(
+      centerY - tooltipSize.height / 2,
+      TOOLTIP_EDGE_PADDING,
+      maxTop,
+    );
+    arrowOffset = clamp(centerY - top, 18, tooltipSize.height - 18);
+  } else if (side === "bottom") {
+    left = clamp(
+      centerX - tooltipSize.width / 2,
+      TOOLTIP_EDGE_PADDING,
+      maxLeft,
+    );
+    top = clamp(
+      triggerRect.bottom + TOOLTIP_GAP,
+      TOOLTIP_EDGE_PADDING,
+      maxTop,
+    );
+    arrowOffset = clamp(centerX - left, 18, tooltipSize.width - 18);
+  } else {
+    left = clamp(
+      centerX - tooltipSize.width / 2,
+      TOOLTIP_EDGE_PADDING,
+      maxLeft,
+    );
+    top = clamp(
+      triggerRect.top - TOOLTIP_GAP - tooltipSize.height,
+      TOOLTIP_EDGE_PADDING,
+      maxTop,
+    );
+    arrowOffset = clamp(centerX - left, 18, tooltipSize.width - 18);
+  }
+
+  return { side, top, left, arrowOffset };
+}
+
 function createMiniMonthDays(monthDate: Date) {
   const firstDay = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
   const lastDay = new Date(
@@ -427,7 +576,6 @@ function TodoCard({
 
 type WeekTodoButtonProps = {
   event: ResolvedTodoEvent;
-  tooltipSide: "left" | "right";
   onSelect: () => void;
   onHover: (
     hoverEvent: ReactMouseEvent<HTMLButtonElement> | FocusEvent<HTMLButtonElement>,
@@ -437,19 +585,32 @@ type WeekTodoButtonProps = {
 
 function WeekTodoButton({
   event,
-  tooltipSide,
   onSelect,
   onHover,
   onLeave,
 }: WeekTodoButtonProps) {
   const categoryMeta = getCategoryMeta(event.category);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    const button = buttonRef.current;
+
+    if (!button) {
+      return;
+    }
+
+    button.removeAttribute("title");
+    button.querySelectorAll("[title]").forEach((node) => {
+      node.removeAttribute("title");
+    });
+  }, [event.title]);
 
   return (
     <button
+      ref={buttonRef}
       type="button"
       className={`week-task ${event.status !== "open" ? "is-muted" : ""}`}
-      data-tooltip-side={tooltipSide}
-      title=""
+      aria-label={event.title}
       style={
         {
           "--event-accent": categoryMeta.accent,
@@ -500,6 +661,7 @@ function App() {
   );
   const [weekTooltip, setWeekTooltip] = useState<WeekTooltipState | null>(null);
   const datePickerRef = useRef<HTMLDivElement | null>(null);
+  const weekTooltipRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -592,6 +754,60 @@ function App() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isDatePickerOpen]);
+
+  useLayoutEffect(() => {
+    if (!weekTooltip) {
+      return;
+    }
+
+    const activeTooltip = weekTooltip;
+
+    function syncWeekTooltipPosition() {
+      const tooltipNode = weekTooltipRef.current;
+
+      if (!tooltipNode) {
+        return;
+      }
+
+      const placement = getTooltipPlacement(
+        activeTooltip.triggerRect,
+        {
+          width: tooltipNode.offsetWidth,
+          height: tooltipNode.offsetHeight,
+        },
+        activeTooltip.preferredSide,
+      );
+
+      setWeekTooltip((current) => {
+        if (!current) {
+          return null;
+        }
+
+        if (
+          current.top === placement.top &&
+          current.left === placement.left &&
+          current.side === placement.side &&
+          current.arrowOffset === placement.arrowOffset
+        ) {
+          return current;
+        }
+
+        return {
+          ...current,
+          ...placement,
+        };
+      });
+    }
+
+    syncWeekTooltipPosition();
+    window.addEventListener("resize", syncWeekTooltipPosition);
+    window.addEventListener("scroll", clearWeekTooltip, true);
+
+    return () => {
+      window.removeEventListener("resize", syncWeekTooltipPosition);
+      window.removeEventListener("scroll", clearWeekTooltip, true);
+    };
+  }, [weekTooltip]);
 
   const categoryOptions = Array.from(
     new Set([...CATEGORY_OPTIONS, ...file.events.map((event) => event.category)]),
@@ -922,23 +1138,36 @@ function App() {
       | ReactMouseEvent<HTMLButtonElement>
       | FocusEvent<HTMLButtonElement>,
     event: ResolvedTodoEvent,
-    dayKey: string,
-    side: "left" | "right",
+    preferredSide: "left" | "right",
   ) {
     const targetRect = hoverEvent.currentTarget.getBoundingClientRect();
-    const weekCell = hoverEvent.currentTarget.closest(".week-cell");
+    hoverEvent.currentTarget.removeAttribute("title");
+    hoverEvent.currentTarget
+      .querySelectorAll("[title]")
+      .forEach((node) => node.removeAttribute("title"));
 
-    if (!weekCell) {
-      return;
-    }
-
-    const weekCellRect = weekCell.getBoundingClientRect();
+    const triggerRect: TooltipRect = {
+      top: targetRect.top,
+      left: targetRect.left,
+      right: targetRect.right,
+      bottom: targetRect.bottom,
+      width: targetRect.width,
+      height: targetRect.height,
+    };
+    const initialPlacement = getTooltipPlacement(
+      triggerRect,
+      {
+        width: getTooltipWidth(window.innerWidth),
+        height: 196,
+      },
+      preferredSide,
+    );
 
     setWeekTooltip({
       event,
-      dayKey,
-      side,
-      top: targetRect.top - weekCellRect.top + targetRect.height / 2,
+      triggerRect,
+      preferredSide,
+      ...initialPlacement,
     });
   }
 
@@ -1491,9 +1720,6 @@ function App() {
                           <section
                             key={dateKey}
                             className={`week-cell ${dateKey === todayKey ? "is-today" : ""} ${dateKey === selectedDateKey ? "is-selected" : ""}`}
-                            style={
-                              weekTooltip?.dayKey === dateKey ? { zIndex: 4 } : undefined
-                            }
                           >
                             <button
                               type="button"
@@ -1520,12 +1746,10 @@ function App() {
                                     <WeekTodoButton
                                       key={event.occurrenceId}
                                       event={event}
-                                      tooltipSide={tooltipSide}
                                       onHover={(hoverEvent) =>
                                         handleWeekTooltipHover(
                                           hoverEvent,
                                           event,
-                                          dateKey,
                                           tooltipSide,
                                         )
                                       }
@@ -1536,42 +1760,6 @@ function App() {
                                 })
                               )}
                             </div>
-
-                            {weekTooltip?.dayKey === dateKey ? (
-                              <div className="week-cell__tooltip-layer" aria-hidden="true">
-                                <article
-                                  className={`week-tooltip week-tooltip--${weekTooltip.side}`}
-                                  style={{ top: `${weekTooltip.top}px` }}
-                                >
-                                  <p className="week-tooltip__title">
-                                    {weekTooltip.event.title}
-                                  </p>
-                                  <dl className="week-tooltip__details">
-                                    <div>
-                                      <dt>Date</dt>
-                                      <dd>{getFullDateLabel(weekTooltip.event.date)}</dd>
-                                    </div>
-                                    <div>
-                                      <dt>Time</dt>
-                                      <dd>{getTimeLabel(weekTooltip.event)}</dd>
-                                    </div>
-                                    <div>
-                                      <dt>Location</dt>
-                                      <dd>
-                                        {weekTooltip.event.location || "No location"}
-                                      </dd>
-                                    </div>
-                                    <div>
-                                      <dt>Notes</dt>
-                                      <dd>
-                                        {getNotesPreview(weekTooltip.event.notes) ||
-                                          "No notes"}
-                                      </dd>
-                                    </div>
-                                  </dl>
-                                </article>
-                              </div>
-                            ) : null}
                           </section>
                         );
                       })}
@@ -1927,6 +2115,41 @@ function App() {
               </div>
             </form>
           </div>
+        </div>
+      ) : null}
+      {weekTooltip ? (
+        <div className="week-cell__tooltip-layer" aria-hidden="true">
+          <article
+            ref={weekTooltipRef}
+            className={`week-tooltip week-tooltip--${weekTooltip.side}`}
+            style={
+              {
+                top: `${weekTooltip.top}px`,
+                left: `${weekTooltip.left}px`,
+                "--tooltip-arrow-offset": `${weekTooltip.arrowOffset}px`,
+              } as CSSProperties
+            }
+          >
+            <p className="week-tooltip__title">{weekTooltip.event.title}</p>
+            <dl className="week-tooltip__details">
+              <div>
+                <dt>Date</dt>
+                <dd>{getFullDateLabel(weekTooltip.event.date)}</dd>
+              </div>
+              <div>
+                <dt>Time</dt>
+                <dd>{getTimeLabel(weekTooltip.event)}</dd>
+              </div>
+              <div>
+                <dt>Location</dt>
+                <dd>{weekTooltip.event.location || "No location"}</dd>
+              </div>
+              <div>
+                <dt>Notes</dt>
+                <dd>{getNotesPreview(weekTooltip.event.notes) || "No notes"}</dd>
+              </div>
+            </dl>
+          </article>
         </div>
       ) : null}
     </>

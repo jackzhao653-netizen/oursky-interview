@@ -731,15 +731,16 @@ option {
 }
 
 .week-cell__tooltip-layer {
-  position: absolute;
+  position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 5;
+  z-index: 1000;
 }
 
 .week-tooltip {
-  position: absolute;
+  position: fixed;
   width: min(260px, calc(100vw - 64px));
+  max-height: min(320px, calc(100vh - 32px));
   padding: 12px 14px;
   border: 1px solid var(--stroke-strong);
   border-radius: 14px;
@@ -750,37 +751,59 @@ option {
     0 18px 34px rgba(0, 0, 0, 0.22),
     0 0 0 1px var(--accent-glow);
   color: var(--text);
-  transform: translateY(-50%);
+  overflow: auto;
+  overscroll-behavior: contain;
   animation: tooltip-fade 180ms ease both;
 }
 
 .week-tooltip::before {
   content: "";
   position: absolute;
-  top: 50%;
   width: 10px;
   height: 10px;
   border-top: 1px solid var(--stroke-strong);
   border-left: 1px solid var(--stroke-strong);
   background: var(--panel-strong);
-  transform: translateY(-50%) rotate(45deg);
 }
 
 .week-tooltip--right {
-  left: calc(100% + 12px);
+  transform-origin: left center;
 }
 
 .week-tooltip--right::before {
+  top: var(--tooltip-arrow-offset, 50%);
   left: -6px;
+  transform: translateY(-50%) rotate(45deg);
 }
 
 .week-tooltip--left {
-  right: calc(100% + 12px);
+  transform-origin: right center;
 }
 
 .week-tooltip--left::before {
+  top: var(--tooltip-arrow-offset, 50%);
   right: -6px;
   transform: translateY(-50%) rotate(225deg);
+}
+
+.week-tooltip--bottom {
+  transform-origin: top center;
+}
+
+.week-tooltip--bottom::before {
+  top: -6px;
+  left: var(--tooltip-arrow-offset, 50%);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.week-tooltip--top {
+  transform-origin: bottom center;
+}
+
+.week-tooltip--top::before {
+  bottom: -6px;
+  left: var(--tooltip-arrow-offset, 50%);
+  transform: translateX(-50%) rotate(225deg);
 }
 
 .week-tooltip__title {
@@ -832,6 +855,7 @@ option {
   font-size: 0.9rem;
   font-weight: 600;
   line-height: 1.35;
+  pointer-events: none;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1419,21 +1443,6 @@ label {
   .view-toolbar,
   .modal-actions {
     justify-content: flex-start;
-  }
-
-  /* Fix tooltip positioning on small screens */
-  .week-tooltip {
-    position: fixed;
-    left: 50% !important;
-    right: auto !important;
-    top: auto !important;
-    bottom: 20px;
-    transform: translateX(-50%);
-    z-index: 1000;
-  }
-
-  .week-tooltip::before {
-    display: none;
   }
 
   .month-jump__popover {
