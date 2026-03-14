@@ -1421,6 +1421,21 @@ label {
     justify-content: flex-start;
   }
 
+  /* Fix tooltip positioning on small screens */
+  .week-tooltip {
+    position: fixed;
+    left: 50% !important;
+    right: auto !important;
+    top: auto !important;
+    bottom: 20px;
+    transform: translateX(-50%);
+    z-index: 1000;
+  }
+
+  .week-tooltip::before {
+    display: none;
+  }
+
   .month-jump__popover {
     left: 0;
     transform: none;

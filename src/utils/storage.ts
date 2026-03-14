@@ -494,6 +494,11 @@ function compactPendingMutations(mutations: PendingMutation[]) {
 }
 
 async function readRemoteEventFile() {
+  // Skip API in development
+  if (import.meta.env.DEV) {
+    throw new Error('API not available in development mode');
+  }
+  
   const response = await fetch("/api/todos", {
     cache: "no-store",
     headers: {
@@ -526,6 +531,12 @@ async function readSeedEventFile() {
 }
 
 async function sendMutation(mutation: PendingMutation) {
+  // Skip API calls in development if API server isn't running
+  if (import.meta.env.DEV) {
+    console.log('[DEV] Skipping API sync:', mutation.type, mutation.eventId);
+    return;
+  }
+  
   const endpoint = `/api/todos/${encodeURIComponent(mutation.eventId)}`;
   const response =
     mutation.type === "delete"
