@@ -831,8 +831,10 @@ function App() {
     `${fromDateKey(todayKey).getFullYear()}`,
   );
   const [weekTooltip, setWeekTooltip] = useState<WeekTooltipState | null>(null);
+  const [dayPanelHeight, setDayPanelHeight] = useState<number | null>(null);
   const datePickerRef = useRef<HTMLDivElement | null>(null);
   const weekTooltipRef = useRef<HTMLElement | null>(null);
+  const sidebarRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -929,6 +931,36 @@ function App() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isDatePickerOpen]);
+
+  useLayoutEffect(() => {
+    const sidebarNode = sidebarRef.current;
+    if (!sidebarNode) {
+      return;
+    }
+
+    const syncDayPanelHeight = () => {
+      const nextHeight = sidebarNode.scrollHeight;
+      setDayPanelHeight((current) => (current === nextHeight ? current : nextHeight));
+    };
+
+    syncDayPanelHeight();
+
+    const resizeObserver = new ResizeObserver(() => {
+      syncDayPanelHeight();
+    });
+
+    resizeObserver.observe(sidebarNode);
+    Array.from(sidebarNode.children).forEach((child) => {
+      resizeObserver.observe(child);
+    });
+
+    window.addEventListener("resize", syncDayPanelHeight);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", syncDayPanelHeight);
+    };
+  }, []);
 
   useLayoutEffect(() => {
     if (!weekTooltip) {
@@ -1721,7 +1753,7 @@ function App() {
           </section>
 
           <div className="app-shell">
-            <aside className="sidebar">
+            <aside className="sidebar" ref={sidebarRef}>
               <section className="panel">
                 <h2>
                   <span>Calendars</span>
@@ -1827,6 +1859,7 @@ function App() {
                     {miniMonthDays.map((day) => {
                       const dateKey = getTodayKey(day);
                       const count = eventsByDate[dateKey]?.length ?? 0;
+                      const countLabel = count > 10 ? "10+" : `${count}`;
                       const isCurrentMonth =
                         day.getMonth() === miniMonthDate.getMonth();
                       const isToday = dateKey === todayKey;
@@ -1840,7 +1873,9 @@ function App() {
                           onClick={() => selectDate(dateKey)}
                         >
                           <span>{day.getDate()}</span>
-                          {count > 0 ? <em>{count}</em> : null}
+                          <em className={count > 0 ? "is-visible" : ""}>
+                            {count > 0 ? countLabel : "00"}
+                          </em>
                         </button>
                       );
                     })}
@@ -1848,45 +1883,47 @@ function App() {
 
                   <div className="sidebar-group">
                     <div className="sidebar-label">Show</div>
-                    <label className="toggle-row">
-                      <input
-                        type="checkbox"
-                        checked={filters.showOpen}
-                        onChange={(event) =>
-                          setFilters((current) => ({
-                            ...current,
-                            showOpen: event.target.checked,
-                          }))
-                        }
-                      />
-                      <span>Open</span>
-                    </label>
-                    <label className="toggle-row">
-                      <input
-                        type="checkbox"
-                        checked={filters.showDone}
-                        onChange={(event) =>
-                          setFilters((current) => ({
-                            ...current,
-                            showDone: event.target.checked,
-                          }))
-                        }
-                      />
-                      <span>Done</span>
-                    </label>
-                    <label className="toggle-row">
-                      <input
-                        type="checkbox"
-                        checked={filters.showCancelled}
-                        onChange={(event) =>
-                          setFilters((current) => ({
-                            ...current,
-                            showCancelled: event.target.checked,
-                          }))
-                        }
-                      />
-                      <span>Cancelled</span>
-                    </label>
+                    <div className="show-row">
+                      <label className="toggle-row">
+                        <input
+                          type="checkbox"
+                          checked={filters.showOpen}
+                          onChange={(event) =>
+                            setFilters((current) => ({
+                              ...current,
+                              showOpen: event.target.checked,
+                            }))
+                          }
+                        />
+                        <span>Open</span>
+                      </label>
+                      <label className="toggle-row">
+                        <input
+                          type="checkbox"
+                          checked={filters.showDone}
+                          onChange={(event) =>
+                            setFilters((current) => ({
+                              ...current,
+                              showDone: event.target.checked,
+                            }))
+                          }
+                        />
+                        <span>Done</span>
+                      </label>
+                      <label className="toggle-row">
+                        <input
+                          type="checkbox"
+                          checked={filters.showCancelled}
+                          onChange={(event) =>
+                            setFilters((current) => ({
+                              ...current,
+                              showCancelled: event.target.checked,
+                            }))
+                          }
+                        />
+                        <span>Cancelled</span>
+                      </label>
+                    </div>
                   </div>
 
                   <div className="sidebar-group">
@@ -1994,7 +2031,16 @@ function App() {
               </section>
             </aside>
 
-            <section className="panel main-panel">
+            <section
+              className={`panel main-panel ${
+                view === "day" ? "main-panel--day" : "main-panel--week"
+              }`}
+              style={
+                view === "day" && dayPanelHeight
+                  ? { height: `${dayPanelHeight}px` }
+                  : undefined
+              }
+            >
               <h2>
                 <span>{view === "day" ? "Day" : "Week"}</span>
                 <span className="pill mono">{mainLabel}</span>
@@ -2059,32 +2105,34 @@ function App() {
                       </span>
                     </div>
 
-                    <div className="task-stack calendar-scroll">
-                      {selectedDateEvents.length === 0 ? (
-                        <p className="empty">
-                          No todos for this day with the current filters.
-                        </p>
-                      ) : (
-                        selectedDateEvents.map((event) => (
-                          <TodoCard
-                            key={event.occurrenceId}
-                            event={event}
-                            todayKey={todayKey}
-                            isSelected={modal.eventId === event.sourceEventId}
-                            onOpen={() => {
-                              const sourceEvent = getSourceEvent(event.sourceEventId);
-                              if (sourceEvent) {
-                                openEditModal(sourceEvent);
+                    <div className="day-task-region">
+                      <div className="task-stack calendar-scroll day-task-scroll">
+                        {selectedDateEvents.length === 0 ? (
+                          <p className="empty">
+                            No todos for this day with the current filters.
+                          </p>
+                        ) : (
+                          selectedDateEvents.map((event) => (
+                            <TodoCard
+                              key={event.occurrenceId}
+                              event={event}
+                              todayKey={todayKey}
+                              isSelected={modal.eventId === event.sourceEventId}
+                              onOpen={() => {
+                                const sourceEvent = getSourceEvent(event.sourceEventId);
+                                if (sourceEvent) {
+                                  openEditModal(sourceEvent);
+                                }
+                              }}
+                              onToggleTodo={() => handleToggleTodo(event.sourceEventId, event.date)}
+                              onToggleChecklistItem={(itemId) =>
+                                handleToggleChecklistItem(event.sourceEventId, itemId)
                               }
-                            }}
-                            onToggleTodo={() => handleToggleTodo(event.sourceEventId, event.date)}
-                            onToggleChecklistItem={(itemId) =>
-                              handleToggleChecklistItem(event.sourceEventId, itemId)
-                            }
-                            onToggleTop3={() => handleToggleTop3(event.sourceEventId)}
-                          />
-                        ))
-                      )}
+                              onToggleTop3={() => handleToggleTop3(event.sourceEventId)}
+                            />
+                          ))
+                        )}
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -2331,99 +2379,110 @@ function App() {
                           <span>Keep this schedule open-ended.</span>
                         </span>
                       </label>
-                      <label
-                        className={`recurrence-option ${
-                          draft.recurrenceCount !== null ? "is-active" : ""
+                      <div
+                        className={`recurrence-option recurrence-option--group ${
+                          draft.recurrenceCount !== null || draft.recurrenceEndDate !== null
+                            ? "is-active"
+                            : ""
                         }`}
                       >
-                        <input
-                          type="radio"
-                          name="recurrence-mode"
-                          checked={draft.recurrenceCount !== null}
-                          onChange={() =>
-                            setDraft((current) =>
-                              normalizeRecurrenceDraft({
-                                ...current,
-                                recurrenceCount: 5,
-                                recurrenceEndDate: null,
-                              }),
-                            )
-                          }
-                        />
                         <span className="recurrence-option__radio" aria-hidden="true">
                           <span className="recurrence-option__radio-dot" />
                         </span>
                         <span className="recurrence-option__copy">
-                          <strong>Repeat a set number</strong>
-                          <span>Use a fixed number of occurrences.</span>
+                          <strong>Repeat with an end condition</strong>
+                          <span>Choose whether this stops after a count or on a date.</span>
                         </span>
-                        <span className="recurrence-option__value">
-                          <input
-                            type="number"
-                            min="1"
-                            max="100"
-                            value={draft.recurrenceCount ?? 5}
-                            disabled={draft.recurrenceCount === null}
-                            onChange={(event) => {
-                              const count = Math.max(1, parseInt(event.target.value, 10) || 1);
-                              setDraft((current) =>
-                                normalizeRecurrenceDraft({
-                                  ...current,
-                                  recurrenceCount: count,
-                                  recurrenceEndDate: null,
-                                }),
-                              );
-                            }}
-                            className="recurrence-input"
-                          />
-                          <span>times</span>
-                        </span>
-                      </label>
-                      <label
-                        className={`recurrence-option ${
-                          draft.recurrenceEndDate !== null ? "is-active" : ""
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="recurrence-mode"
-                          checked={draft.recurrenceEndDate !== null}
-                          onChange={() =>
-                            setDraft((current) =>
-                              normalizeRecurrenceDraft({
-                                ...current,
-                                recurrenceCount: null,
-                                recurrenceEndDate: getTodayKey(addDays(fromDateKey(current.date), 30)),
-                              }),
-                            )
-                          }
-                        />
-                        <span className="recurrence-option__radio" aria-hidden="true">
-                          <span className="recurrence-option__radio-dot" />
-                        </span>
-                        <span className="recurrence-option__copy">
-                          <strong>Repeat until a date</strong>
-                          <span>Stop generating occurrences on a specific date.</span>
-                        </span>
-                        <span className="recurrence-option__value">
-                          <span>Until</span>
-                          <input
-                            type="date"
-                            value={draft.recurrenceEndDate ?? ""}
-                            disabled={draft.recurrenceEndDate === null}
-                            onChange={(event) =>
-                              setDraft((current) =>
-                                normalizeRecurrenceDraft({
-                                  ...current,
-                                  recurrenceCount: null,
-                                  recurrenceEndDate: event.target.value,
-                                }),
-                              )
-                            }
-                            className="recurrence-input"
-                          />
-                        </span>
-                      </label>
+                        <div className="recurrence-option__group">
+                          <label
+                            className={`recurrence-option__suboption ${
+                              draft.recurrenceCount !== null ? "is-active" : ""
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="recurrence-mode"
+                              checked={draft.recurrenceCount !== null}
+                              onChange={() =>
+                                setDraft((current) =>
+                                  normalizeRecurrenceDraft({
+                                    ...current,
+                                    recurrenceCount: 5,
+                                    recurrenceEndDate: null,
+                                  }),
+                                )
+                              }
+                            />
+                            <span className="recurrence-option__subcopy">
+                              <strong>Repeat a set number</strong>
+                              <span>Use a fixed number of occurrences.</span>
+                            </span>
+                            <span className="recurrence-option__value">
+                              <input
+                                type="number"
+                                min="1"
+                                max="100"
+                                value={draft.recurrenceCount ?? 5}
+                                disabled={draft.recurrenceCount === null}
+                                onChange={(event) => {
+                                  const count = Math.max(1, parseInt(event.target.value, 10) || 1);
+                                  setDraft((current) =>
+                                    normalizeRecurrenceDraft({
+                                      ...current,
+                                      recurrenceCount: count,
+                                      recurrenceEndDate: null,
+                                    }),
+                                  );
+                                }}
+                                className="recurrence-input"
+                              />
+                              <span>times</span>
+                            </span>
+                          </label>
+                          <label
+                            className={`recurrence-option__suboption ${
+                              draft.recurrenceEndDate !== null ? "is-active" : ""
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="recurrence-mode"
+                              checked={draft.recurrenceEndDate !== null}
+                              onChange={() =>
+                                setDraft((current) =>
+                                  normalizeRecurrenceDraft({
+                                    ...current,
+                                    recurrenceCount: null,
+                                    recurrenceEndDate: getTodayKey(addDays(fromDateKey(current.date), 30)),
+                                  }),
+                                )
+                              }
+                            />
+                            <span className="recurrence-option__subcopy">
+                              <strong>Repeat until a date</strong>
+                              <span>Stop generating occurrences on a specific date.</span>
+                            </span>
+                            <span className="recurrence-option__value">
+                              <span>Until</span>
+                              <input
+                                type="date"
+                                value={draft.recurrenceEndDate ?? ""}
+                                disabled={draft.recurrenceEndDate === null}
+                                onChange={(event) =>
+                                  setDraft((current) =>
+                                    normalizeRecurrenceDraft({
+                                      ...current,
+                                      recurrenceCount: null,
+                                      recurrenceEndDate: event.target.value,
+                                    }),
+                                  )
+                                }
+                                className="recurrence-input"
+                              />
+                            </span>
+                          </label>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
