@@ -656,6 +656,7 @@ function App() {
     priority: "green",
   });
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [pickerYear, setPickerYear] = useState(() =>
     `${fromDateKey(todayKey).getFullYear()}`,
   );
@@ -1030,13 +1031,27 @@ function App() {
     selectDate(quickAdd.date);
   }
 
-  function handleToggleTodo(eventId: string) {
+  function handleToggleTodo(eventId: string, occurrenceDate?: string) {
     applyEvents((events) =>
       events.map((event) => {
         if (event.id !== eventId) {
           return event;
         }
 
+        // For recurring tasks, track completed occurrences
+        if (event.recurrence !== "once" && occurrenceDate) {
+          const isCurrentlyCompleted = event.completedOccurrences.includes(occurrenceDate);
+          
+          return {
+            ...event,
+            completedOccurrences: isCurrentlyCompleted
+              ? event.completedOccurrences.filter(d => d !== occurrenceDate)
+              : [...event.completedOccurrences, occurrenceDate],
+            updatedAt: new Date().toISOString(),
+          };
+        }
+
+        // For one-time tasks, toggle status as before
         return updateEventStatus(
           event,
           event.status === "done" ? "open" : "done",
@@ -1205,9 +1220,6 @@ function App() {
             </div>
 
             <div className="header-pills">
-              <span className="pill">{openCount} open</span>
-              <span className="pill">{doneCount} done</span>
-              <span className="pill">{overdueCount} overdue</span>
               <button
                 type="button"
                 className="theme-toggle"
@@ -1216,6 +1228,14 @@ function App() {
                 }
               >
                 {theme === "dark" ? "Light mode" : "Dark mode"}
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setIsSettingsOpen(true)}
+                title="Settings"
+              >
+                ⚙️ Settings
               </button>
               <button
                 type="button"
@@ -1699,7 +1719,7 @@ function App() {
                                 openEditModal(sourceEvent);
                               }
                             }}
-                            onToggleTodo={() => handleToggleTodo(event.sourceEventId)}
+                            onToggleTodo={() => handleToggleTodo(event.sourceEventId, event.date)}
                             onToggleChecklistItem={(itemId) =>
                               handleToggleChecklistItem(event.sourceEventId, itemId)
                             }
