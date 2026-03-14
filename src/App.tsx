@@ -470,7 +470,6 @@ function WeekTodoButton({
         } as CSSProperties
       }
       onClick={onSelect}
-      title={getWeekTaskTooltip(event)}
       onMouseEnter={onHover}
       onFocus={onHover}
       onMouseLeave={onLeave}
@@ -1497,7 +1496,9 @@ function App() {
                               ) : (
                                 events.map((event) => {
                                   const tooltipSide =
-                                    day.getDay() === 0 ? "left" : "right";
+                                    day.getDay() === 0 || day.getDay() === 6
+                                      ? "left"
+                                      : "right";
 
                                   return (
                                     <WeekTodoButton
