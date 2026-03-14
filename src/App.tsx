@@ -1919,10 +1919,11 @@ function App() {
                 {(draft.recurrence === "weekly" || draft.recurrence === "monthly") && (
                   <div className="field-group">
                     <span>Recurrence Options</span>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                      <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <div className="recurrence-options">
+                      <label className="recurrence-option">
                         <input
                           type="radio"
+                          name="recurrence-mode"
                           checked={draft.recurrenceCount === null && draft.recurrenceEndDate === null}
                           onChange={() =>
                             setDraft((current) => ({
@@ -1932,11 +1933,12 @@ function App() {
                             }))
                           }
                         />
-                        Repeat forever
+                        <span>Repeat forever</span>
                       </label>
-                      <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <label className="recurrence-option">
                         <input
                           type="radio"
+                          name="recurrence-mode"
                           checked={draft.recurrenceCount !== null}
                           onChange={() =>
                             setDraft((current) => ({
@@ -1946,7 +1948,7 @@ function App() {
                             }))
                           }
                         />
-                        Repeat
+                        <span>Repeat</span>
                         <input
                           type="number"
                           min="1"
@@ -1961,13 +1963,14 @@ function App() {
                               recurrenceEndDate: null,
                             }));
                           }}
-                          style={{ width: "4rem", padding: "0.25rem 0.5rem" }}
+                          className="recurrence-input"
                         />
-                        times
+                        <span>times</span>
                       </label>
-                      <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <label className="recurrence-option">
                         <input
                           type="radio"
+                          name="recurrence-mode"
                           checked={draft.recurrenceEndDate !== null}
                           onChange={() =>
                             setDraft((current) => ({
@@ -1977,7 +1980,7 @@ function App() {
                             }))
                           }
                         />
-                        Repeat until
+                        <span>Repeat until</span>
                         <input
                           type="date"
                           value={draft.recurrenceEndDate ?? ""}
@@ -1989,7 +1992,7 @@ function App() {
                               recurrenceEndDate: event.target.value,
                             }))
                           }
-                          style={{ padding: "0.25rem 0.5rem" }}
+                          className="recurrence-input"
                         />
                       </label>
                     </div>

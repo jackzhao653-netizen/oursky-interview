@@ -1469,3 +1469,51 @@ label {
     grid-column: 1 / -1;
   }
 }
+
+/* Recurrence Options */
+.recurrence-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.recurrence-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.recurrence-option input[type="radio"] {
+  cursor: pointer;
+}
+
+.recurrence-option input[type="number"],
+.recurrence-option input[type="date"] {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.recurrence-option input[type="number"] {
+  width: 4rem;
+}
+
+.recurrence-option input[type="date"] {
+  width: auto;
+}
+
+.recurrence-option input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.recurrence-input {
+  flex-shrink: 0;
+}
