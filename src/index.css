@@ -571,8 +571,14 @@ option {
 }
 
 .day-view .calendar-scroll {
-  max-height: var(--day-scroll-max-height);
+  max-height: none;
+  min-height: 0;
   align-content: start;
+}
+
+.task-stack {
+  align-content: start;
+  grid-auto-rows: max-content;
 }
 
 .week-view {
@@ -679,6 +685,7 @@ option {
   padding: 12px;
   position: relative;
   overflow: hidden;
+  min-width: 0;
 }
 
 .todo-card.is-muted {
@@ -689,16 +696,23 @@ option {
   align-items: flex-start;
 }
 
+.todo-card__titleline {
+  align-items: flex-start;
+}
+
 .todo-card__content {
   min-width: 0;
   display: grid;
   gap: 10px;
   flex: 1;
+  align-content: start;
 }
 
 .todo-card__titleline h3 {
   flex: 1;
   min-width: 0;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .todo-card h3 {
@@ -710,10 +724,12 @@ option {
   margin: 4px 0 0;
   color: var(--muted2);
   font-size: 0.78rem;
+  overflow-wrap: anywhere;
 }
 
 .todo-card__meta {
   gap: 8px;
+  align-items: flex-start;
 }
 
 .todo-card__checklist {
@@ -741,6 +757,13 @@ option {
   padding: 8px 10px;
   border-radius: 10px;
   background: var(--surface-3);
+  align-items: flex-start;
+}
+
+.check-item span,
+.todo-card__summary,
+.todo-card__notes {
+  overflow-wrap: anywhere;
 }
 
 .check-item.is-done span {
@@ -814,13 +837,61 @@ option {
   color: var(--muted);
 }
 
-.priority-selection {
-  display: grid;
+.filter-tag-row {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
+.filter-tag {
+  min-height: 32px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: var(--text);
+}
+
+.filter-tag.is-active {
+  color: var(--text);
+}
+
+.filter-tag.is-inactive {
+  opacity: 0.58;
+  border-color: var(--stroke-soft);
+  background: var(--surface-3);
+}
+
+.filter-tag__swatch {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 999px;
+}
+
+.filter-tag--priority {
+  justify-content: center;
+  min-width: 34px;
+  padding-inline: 11px;
+}
+
+.filter-tag--priority.is-active {
+  border-color: var(--accent-strong);
+  background: var(--surface-selected);
+  box-shadow: inset 0 0 0 1px var(--accent-glow);
+}
+
+.priority-selection {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .priority-option {
+  display: flex;
+  align-items: center;
   justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
   text-align: left;
   border-color: var(--stroke);
   background: var(--surface-2);
@@ -830,6 +901,39 @@ option {
   border-color: var(--accent-strong);
   background: var(--surface-selected);
   box-shadow: inset 0 0 0 1px var(--accent-glow);
+}
+
+.priority-option__radio {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--stroke-strong);
+  border-radius: 999px;
+}
+
+.priority-option__radio-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  transform: scale(0);
+  transition: transform 160ms ease;
+}
+
+.priority-option__label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.priority-option.is-active .priority-option__radio {
+  border-color: var(--accent-strong);
+}
+
+.priority-option.is-active .priority-option__radio-dot {
+  transform: scale(1);
 }
 
 .pill--ghost {

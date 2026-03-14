@@ -139,12 +139,14 @@ type PriorityBadgeProps = {
   priority: PriorityLevel;
   showDescription?: boolean;
   compact?: boolean;
+  dotOnly?: boolean;
 };
 
 function PriorityBadge({
   priority,
   showDescription = false,
   compact = false,
+  dotOnly = false,
 }: PriorityBadgeProps) {
   const meta = getPriorityMeta(priority);
 
@@ -160,12 +162,14 @@ function PriorityBadge({
       }
     >
       <span className="priority-dot" aria-hidden="true" />
-      <span className="priority-mark__copy">
-        <span className="priority-mark__label">{meta.label}</span>
-        {showDescription ? (
-          <span className="priority-mark__description">{meta.description}</span>
-        ) : null}
-      </span>
+      {dotOnly ? null : (
+        <span className="priority-mark__copy">
+          <span className="priority-mark__label">{meta.label}</span>
+          {showDescription ? (
+            <span className="priority-mark__description">{meta.description}</span>
+          ) : null}
+        </span>
+      )}
     </span>
   );
 }
@@ -974,74 +978,82 @@ function App() {
                   </div>
 
                   <div className="sidebar-group">
-                    <div className="sidebar-label">Categories</div>
-                    {courseOptions.map((course) => {
-                      const categoryMeta = getCategoryMeta(course);
-                      const checked = !filters.hiddenCourses.includes(course);
+                    <div className="sidebar-label">Tags</div>
+                    <div
+                      className="filter-tag-row"
+                      aria-label="Category and priority filters"
+                    >
+                      {courseOptions.map((course) => {
+                        const categoryMeta = getCategoryMeta(course);
+                        const isActive = !filters.hiddenCourses.includes(course);
 
-                      return (
-                        <label key={course} className="toggle-row">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(event) =>
+                        return (
+                          <button
+                            key={course}
+                            type="button"
+                            className={`pill filter-tag ${isActive ? "is-active" : "is-inactive"}`}
+                            aria-pressed={isActive}
+                            onClick={() =>
                               setFilters((current) => ({
                                 ...current,
-                                hiddenCourses: event.target.checked
-                                  ? current.hiddenCourses.filter(
+                                hiddenCourses: isActive
+                                  ? [...current.hiddenCourses, course]
+                                  : current.hiddenCourses.filter(
                                       (value) => value !== course,
-                                    )
-                                  : [...current.hiddenCourses, course],
+                                    ),
                               }))
                             }
-                          />
-                          <span
-                            className="pill"
-                            style={{
-                              borderColor: categoryMeta.border,
-                              background: categoryMeta.soft,
-                            }}
+                            style={
+                              isActive
+                                ? {
+                                    borderColor: categoryMeta.border,
+                                    background: categoryMeta.soft,
+                                  }
+                                : undefined
+                            }
                           >
-                            {course}
-                          </span>
-                        </label>
-                      );
-                    })}
+                            <span
+                              className="filter-tag__swatch"
+                              aria-hidden="true"
+                              style={{ background: categoryMeta.accent }}
+                            />
+                            <span>{course}</span>
+                          </button>
+                        );
+                      })}
 
-                    <div className="sidebar-group__split" />
-                    <div className="sidebar-label">Priority colors</div>
-                    {PRIORITY_LEVELS.map((priority) => {
-                      const checked =
-                        filters.selectedPriorities.includes(priority);
+                      {PRIORITY_LEVELS.map((priority) => {
+                        const isActive =
+                          filters.selectedPriorities.includes(priority);
 
-                      return (
-                        <label key={priority} className="toggle-row">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(event) =>
+                        return (
+                          <button
+                            key={priority}
+                            type="button"
+                            className={`pill filter-tag filter-tag--priority ${isActive ? "is-active" : "is-inactive"}`}
+                            aria-pressed={isActive}
+                            onClick={() =>
                               setFilters((current) => ({
                                 ...current,
-                                selectedPriorities: event.target.checked
-                                  ? Array.from(
+                                selectedPriorities: isActive
+                                  ? current.selectedPriorities.filter(
+                                      (value) => value !== priority,
+                                    )
+                                  : Array.from(
                                       new Set([
                                         ...current.selectedPriorities,
                                         priority,
                                       ]),
-                                    )
-                                  : current.selectedPriorities.filter(
-                                      (value) => value !== priority,
                                     ),
                               }))
                             }
-                          />
-                          <PriorityBadge
-                            priority={priority}
-                            showDescription
-                          />
-                        </label>
-                      );
-                    })}
+                            aria-label={`${getPriorityMeta(priority).label} priority filter`}
+                          >
+                            <PriorityBadge priority={priority} dotOnly />
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </section>
@@ -1235,7 +1247,7 @@ function App() {
 
                 <div className="form-grid">
                   <label>
-                    Due date
+                    Date
                     <input
                       type="date"
                       value={draft.date}
@@ -1248,7 +1260,7 @@ function App() {
                     />
                   </label>
                   <label>
-                    Category
+                    Course
                     <select
                       value={draft.course}
                       onChange={(event) =>
@@ -1268,58 +1280,8 @@ function App() {
                 </div>
 
                 <div className="form-grid">
-                  <div className="field-group">
-                    <span>Priority</span>
-                    <div
-                      className="priority-selection"
-                      role="radiogroup"
-                      aria-label="Priority"
-                    >
-                      {PRIORITY_LEVELS.map((priority) => (
-                        <button
-                          key={priority}
-                          type="button"
-                          role="radio"
-                          aria-checked={draft.priority === priority}
-                          className={`priority-option ${draft.priority === priority ? "is-active" : ""}`}
-                          onClick={() =>
-                            setDraft((current) => ({
-                              ...current,
-                              priority,
-                            }))
-                          }
-                        >
-                          <PriorityBadge
-                            priority={priority}
-                            showDescription
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
                   <label>
-                    Kind
-                    <select
-                      value={draft.kind}
-                      onChange={(event) =>
-                        setDraft((current) => ({
-                          ...current,
-                          kind: event.target.value,
-                        }))
-                      }
-                    >
-                      {TODO_KINDS.map((kind) => (
-                        <option key={kind} value={kind}>
-                          {kind}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-
-                <div className="form-grid">
-                  <label>
-                    Start
+                    Start time
                     <input
                       type="time"
                       value={draft.start}
@@ -1332,7 +1294,7 @@ function App() {
                     />
                   </label>
                   <label>
-                    End
+                    End time
                     <input
                       type="time"
                       value={draft.end}
@@ -1346,37 +1308,89 @@ function App() {
                   </label>
                 </div>
 
-                <div className="form-grid">
-                  <label>
-                    Context
-                    <input
-                      value={draft.location}
-                      onChange={(event) =>
-                        setDraft((current) => ({
-                          ...current,
-                          location: event.target.value,
-                        }))
-                      }
-                      placeholder="Desk, Figma, phone, commute"
-                    />
-                  </label>
-                  <label>
-                    Add to today&apos;s Top 3
-                    <button
-                      type="button"
-                      className={`toggle-pill ${draft.top3Date === todayKey ? "is-active" : ""}`}
-                      onClick={() =>
-                        setDraft((current) => ({
-                          ...current,
-                          top3Date:
-                            current.top3Date === todayKey ? null : todayKey,
-                        }))
-                      }
-                    >
-                      {draft.top3Date === todayKey ? "Pinned" : "Not pinned"}
-                    </button>
-                  </label>
+                <label>
+                  Kind
+                  <select
+                    value={draft.kind}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        kind: event.target.value,
+                      }))
+                    }
+                  >
+                    {TODO_KINDS.map((kind) => (
+                      <option key={kind} value={kind}>
+                        {kind}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div className="field-group">
+                  <span>Priority</span>
+                  <div
+                    className="priority-selection"
+                    role="radiogroup"
+                    aria-label="Priority"
+                  >
+                    {PRIORITY_LEVELS.map((priority) => {
+                      const priorityMeta = getPriorityMeta(priority);
+
+                      return (
+                        <button
+                          key={priority}
+                          type="button"
+                          role="radio"
+                          aria-checked={draft.priority === priority}
+                          className={`priority-option ${draft.priority === priority ? "is-active" : ""}`}
+                          onClick={() =>
+                            setDraft((current) => ({
+                              ...current,
+                              priority,
+                            }))
+                          }
+                        >
+                          <span className="priority-option__radio" aria-hidden="true">
+                            <span className="priority-option__radio-dot" />
+                          </span>
+                          <PriorityBadge priority={priority} dotOnly />
+                          <span className="priority-option__label">
+                            {priorityMeta.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
+
+                <label>
+                  Location
+                  <input
+                    value={draft.location}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        location: event.target.value,
+                      }))
+                    }
+                    placeholder="Desk, Figma, phone, commute"
+                  />
+                </label>
+
+                <label>
+                  Notes
+                  <textarea
+                    value={draft.notes}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        notes: event.target.value,
+                      }))
+                    }
+                    placeholder="Supporting context, dependencies, or next action"
+                  />
+                </label>
 
                 <div className="status-row">
                   {(["open", "done", "cancelled"] as const).map((status) => (
@@ -1392,17 +1406,20 @@ function App() {
                 </div>
 
                 <label>
-                  Notes
-                  <textarea
-                    value={draft.notes}
-                    onChange={(event) =>
+                  Add to today&apos;s Top 3
+                  <button
+                    type="button"
+                    className={`toggle-pill ${draft.top3Date === todayKey ? "is-active" : ""}`}
+                    onClick={() =>
                       setDraft((current) => ({
                         ...current,
-                        notes: event.target.value,
+                        top3Date:
+                          current.top3Date === todayKey ? null : todayKey,
                       }))
                     }
-                    placeholder="Supporting context, dependencies, or next action"
-                  />
+                  >
+                    {draft.top3Date === todayKey ? "Pinned" : "Not pinned"}
+                  </button>
                 </label>
 
                 <div className="checklist-editor">
