@@ -56,6 +56,8 @@ type AppSettings = {
   defaultView: CalendarView;
   showCompletedTasks: boolean;
   dateFormat: SettingsDateFormat;
+  categories: string[];
+  kinds: string[];
 };
 
 type ModalState = {
@@ -110,6 +112,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   defaultView: "week",
   showCompletedTasks: false,
   dateFormat: "long",
+  categories: [...CATEGORY_OPTIONS],
+  kinds: [...ACTIVITY_OPTIONS],
 };
 const MOBILE_TOOLTIP_BREAKPOINT = 720;
 const TOOLTIP_EDGE_PADDING = 16;
@@ -310,6 +314,26 @@ function loadStoredSettings(): AppSettings {
     }
 
     const parsed = JSON.parse(raw) as Partial<AppSettings>;
+    const categories = Array.isArray(parsed.categories)
+      ? Array.from(
+          new Set(
+            parsed.categories
+              .filter((value): value is string => typeof value === "string")
+              .map((value) => value.trim())
+              .filter((value) => value.length > 0),
+          ),
+        )
+      : [];
+    const kinds = Array.isArray(parsed.kinds)
+      ? Array.from(
+          new Set(
+            parsed.kinds
+              .filter((value): value is string => typeof value === "string")
+              .map((value) => value.trim())
+              .filter((value) => value.length > 0),
+          ),
+        )
+      : [];
 
     return {
       defaultView: parsed.defaultView === "day" ? "day" : DEFAULT_SETTINGS.defaultView,
@@ -318,11 +342,31 @@ function loadStoredSettings(): AppSettings {
           ? parsed.showCompletedTasks
           : DEFAULT_SETTINGS.showCompletedTasks,
       dateFormat: parsed.dateFormat === "compact" ? "compact" : DEFAULT_SETTINGS.dateFormat,
+      categories: categories.length > 0 ? categories : [...DEFAULT_SETTINGS.categories],
+      kinds: kinds.length > 0 ? kinds : [...DEFAULT_SETTINGS.kinds],
     };
   } catch (error) {
     console.error("Failed to parse stored settings", error);
     return DEFAULT_SETTINGS;
   }
+}
+
+function getDefaultCategory(settings: AppSettings) {
+  return settings.categories[0] ?? CATEGORY_OPTIONS[0];
+}
+
+function getDefaultKind(settings: AppSettings) {
+  return settings.kinds[0] ?? ACTIVITY_OPTIONS[0];
+}
+
+function createConfiguredEmptyTodoEvent(dateKey: string, settings: AppSettings) {
+  const emptyEvent = createEmptyTodoEvent(dateKey);
+
+  return {
+    ...emptyEvent,
+    category: getDefaultCategory(settings),
+    activity: getDefaultKind(settings),
+  };
 }
 
 function getCalculatedRecurrenceEndDate(
@@ -767,16 +811,22 @@ function App() {
     open: false,
     eventId: null,
   });
-  const [draft, setDraft] = useState(() => createEmptyTodoEvent(todayKey));
+  const [draft, setDraft] = useState(() =>
+    createConfiguredEmptyTodoEvent(todayKey, loadStoredSettings()),
+  );
   const [notice, setNotice] = useState("");
-  const [quickAdd, setQuickAdd] = useState<QuickAddState>({
+  const [quickAdd, setQuickAdd] = useState<QuickAddState>(() => ({
     title: "",
     date: todayKey,
-    category: CATEGORY_OPTIONS[0],
+    category: getDefaultCategory(loadStoredSettings()),
     priority: "green",
-  });
+  }));
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [categoryInput, setCategoryInput] = useState("");
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [kindInput, setKindInput] = useState("");
+  const [editingKind, setEditingKind] = useState<string | null>(null);
   const [pickerYear, setPickerYear] = useState(() =>
     `${fromDateKey(todayKey).getFullYear()}`,
   );
@@ -935,8 +985,19 @@ function App() {
   }, [weekTooltip]);
 
   const categoryOptions = Array.from(
-    new Set([...CATEGORY_OPTIONS, ...file.events.map((event) => event.category)]),
+    new Set([...settings.categories, ...file.events.map((event) => event.category)]),
   );
+  const kindOptions = Array.from(
+    new Set([...settings.kinds, ...file.events.map((event) => event.activity)]),
+  );
+  const categoryUsage = file.events.reduce<Record<string, number>>((counts, event) => {
+    counts[event.category] = (counts[event.category] ?? 0) + 1;
+    return counts;
+  }, {});
+  const kindUsage = file.events.reduce<Record<string, number>>((counts, event) => {
+    counts[event.activity] = (counts[event.activity] ?? 0) + 1;
+    return counts;
+  }, {});
   const weekStartKey = getTodayKey(startOfWeek(cursorDate));
   const weekEndKey = getTodayKey(addDays(startOfWeek(cursorDate), 6));
   const weekDays = Array.from({ length: 7 }, (_, index) =>
@@ -1034,7 +1095,7 @@ function App() {
   }
 
   function openNewModal(dateKey = selectedDateKey) {
-    setDraft(normalizeRecurrenceDraft(createEmptyTodoEvent(dateKey)));
+    setDraft(normalizeRecurrenceDraft(createConfiguredEmptyTodoEvent(dateKey, settings)));
     setModal({ open: true, eventId: null });
   }
 
@@ -1048,6 +1109,154 @@ function App() {
 
   function closeModal() {
     setModal({ open: false, eventId: null });
+  }
+
+  function resetCategoryEditor() {
+    setEditingCategory(null);
+    setCategoryInput("");
+  }
+
+  function resetKindEditor() {
+    setEditingKind(null);
+    setKindInput("");
+  }
+
+  function handleSaveCategoryOption() {
+    const nextValue = categoryInput.trim();
+
+    if (!nextValue) {
+      setNotice("Category name is required.");
+      return;
+    }
+
+    const duplicate = categoryOptions.some(
+      (category) =>
+        category.toLocaleLowerCase() === nextValue.toLocaleLowerCase() &&
+        category !== editingCategory,
+    );
+
+    if (duplicate) {
+      setNotice("Category already exists.");
+      return;
+    }
+
+    if (editingCategory) {
+      if (editingCategory === nextValue) {
+        resetCategoryEditor();
+        return;
+      }
+
+      const timestamp = new Date().toISOString();
+      setSettings((current) => ({
+        ...current,
+        categories: categoryOptions.map((category) =>
+          category === editingCategory ? nextValue : category,
+        ),
+      }));
+      applyEvents((events) =>
+        events.map((event) =>
+          event.category === editingCategory
+            ? {
+                ...event,
+                category: nextValue,
+                updatedAt: timestamp,
+              }
+            : event,
+        ),
+      );
+      setQuickAdd((current) =>
+        current.category === editingCategory
+          ? { ...current, category: nextValue }
+          : current,
+      );
+      setDraft((current) =>
+        current.category === editingCategory
+          ? { ...current, category: nextValue }
+          : current,
+      );
+      setFilters((current) => ({
+        ...current,
+        hiddenCategories: current.hiddenCategories.map((category) =>
+          category === editingCategory ? nextValue : category,
+        ),
+      }));
+      setNotice(`Category updated to ${nextValue}.`);
+      resetCategoryEditor();
+      return;
+    }
+
+    setSettings((current) => ({
+      ...current,
+      categories: [...categoryOptions, nextValue],
+    }));
+    setQuickAdd((current) =>
+      current.category
+        ? current
+        : { ...current, category: nextValue },
+    );
+    setNotice(`Category ${nextValue} added.`);
+    resetCategoryEditor();
+  }
+
+  function handleSaveKindOption() {
+    const nextValue = kindInput.trim();
+
+    if (!nextValue) {
+      setNotice("Kind name is required.");
+      return;
+    }
+
+    const duplicate = kindOptions.some(
+      (kind) =>
+        kind.toLocaleLowerCase() === nextValue.toLocaleLowerCase() &&
+        kind !== editingKind,
+    );
+
+    if (duplicate) {
+      setNotice("Kind already exists.");
+      return;
+    }
+
+    if (editingKind) {
+      if (editingKind === nextValue) {
+        resetKindEditor();
+        return;
+      }
+
+      const timestamp = new Date().toISOString();
+      setSettings((current) => ({
+        ...current,
+        kinds: kindOptions.map((kind) =>
+          kind === editingKind ? nextValue : kind,
+        ),
+      }));
+      applyEvents((events) =>
+        events.map((event) =>
+          event.activity === editingKind
+            ? {
+                ...event,
+                activity: nextValue,
+                updatedAt: timestamp,
+              }
+            : event,
+        ),
+      );
+      setDraft((current) =>
+        current.activity === editingKind
+          ? { ...current, activity: nextValue }
+          : current,
+      );
+      setNotice(`Kind updated to ${nextValue}.`);
+      resetKindEditor();
+      return;
+    }
+
+    setSettings((current) => ({
+      ...current,
+      kinds: [...kindOptions, nextValue],
+    }));
+    setNotice(`Kind ${nextValue} added.`);
+    resetKindEditor();
   }
 
   function updateChecklistItem(
@@ -1134,7 +1343,7 @@ function App() {
       return;
     }
 
-    const nextEvent = createEmptyTodoEvent(quickAdd.date);
+    const nextEvent = createConfiguredEmptyTodoEvent(quickAdd.date, settings);
     nextEvent.title = title;
     nextEvent.category = quickAdd.category;
     nextEvent.priority = quickAdd.priority;
@@ -1173,6 +1382,38 @@ function App() {
       }),
     );
   }
+
+  useEffect(() => {
+    const nextCategory = categoryOptions[0] ?? CATEGORY_OPTIONS[0];
+    const nextKind = kindOptions[0] ?? ACTIVITY_OPTIONS[0];
+
+    if (!categoryOptions.includes(quickAdd.category)) {
+      setQuickAdd((current) => ({
+        ...current,
+        category: nextCategory,
+      }));
+    }
+
+    if (!categoryOptions.includes(draft.category)) {
+      setDraft((current) => ({
+        ...current,
+        category: nextCategory,
+      }));
+    }
+
+    if (!kindOptions.includes(draft.activity)) {
+      setDraft((current) => ({
+        ...current,
+        activity: nextKind,
+      }));
+    }
+  }, [
+    categoryOptions,
+    draft.activity,
+    draft.category,
+    kindOptions,
+    quickAdd.category,
+  ]);
 
   function handleToggleChecklistItem(eventId: string, itemId: string) {
     applyEvents((events) =>
@@ -1324,10 +1565,7 @@ function App() {
         <div className="wrap">
           <div className="top">
             <div className="brand">
-              <div>
-                <p className="eyebrow">Oursky checklist planner</p>
-                <h1>Oursky Planner</h1>
-              </div>
+              <img src="/oursky-logo.svg" alt="Oursky" className="brand-logo" />
               <p className="brand-copy">
                 Calendar-first task control with focused daily execution.
               </p>
@@ -2016,9 +2254,9 @@ function App() {
                         }))
                       }
                     >
-                      {ACTIVITY_OPTIONS.map((activity) => (
-                        <option key={activity} value={activity}>
-                          {activity}
+                      {kindOptions.map((kind) => (
+                        <option key={kind} value={kind}>
+                          {kind}
                         </option>
                       ))}
                     </select>
@@ -2059,7 +2297,14 @@ function App() {
                   <div className="recurrence-options-wrapper">
                     <span>Recurrence Options</span>
                     <div className="recurrence-options">
-                      <label className="recurrence-option">
+                      <label
+                        className={`recurrence-option ${
+                          draft.recurrenceCount === null &&
+                          draft.recurrenceEndDate === null
+                            ? "is-active"
+                            : ""
+                        }`}
+                      >
                         <input
                           type="radio"
                           name="recurrence-mode"
@@ -2072,9 +2317,19 @@ function App() {
                             }))
                           }
                         />
-                        <span>Repeat forever</span>
+                        <span className="recurrence-option__radio" aria-hidden="true">
+                          <span className="recurrence-option__radio-dot" />
+                        </span>
+                        <span className="recurrence-option__copy">
+                          <strong>Repeat forever</strong>
+                          <span>Keep this schedule open-ended.</span>
+                        </span>
                       </label>
-                      <label className="recurrence-option">
+                      <label
+                        className={`recurrence-option ${
+                          draft.recurrenceCount !== null ? "is-active" : ""
+                        }`}
+                      >
                         <input
                           type="radio"
                           name="recurrence-mode"
@@ -2089,28 +2344,40 @@ function App() {
                             )
                           }
                         />
-                        <span>Repeat</span>
-                        <input
-                          type="number"
-                          min="1"
-                          max="100"
-                          value={draft.recurrenceCount ?? 5}
-                          disabled={draft.recurrenceCount === null}
-                          onChange={(event) => {
-                            const count = Math.max(1, parseInt(event.target.value, 10) || 1);
-                            setDraft((current) =>
-                              normalizeRecurrenceDraft({
-                                ...current,
-                                recurrenceCount: count,
-                                recurrenceEndDate: null,
-                              }),
-                            );
-                          }}
-                          className="recurrence-input"
-                        />
-                        <span>times</span>
+                        <span className="recurrence-option__radio" aria-hidden="true">
+                          <span className="recurrence-option__radio-dot" />
+                        </span>
+                        <span className="recurrence-option__copy">
+                          <strong>Repeat a set number</strong>
+                          <span>Use a fixed number of occurrences.</span>
+                        </span>
+                        <span className="recurrence-option__value">
+                          <input
+                            type="number"
+                            min="1"
+                            max="100"
+                            value={draft.recurrenceCount ?? 5}
+                            disabled={draft.recurrenceCount === null}
+                            onChange={(event) => {
+                              const count = Math.max(1, parseInt(event.target.value, 10) || 1);
+                              setDraft((current) =>
+                                normalizeRecurrenceDraft({
+                                  ...current,
+                                  recurrenceCount: count,
+                                  recurrenceEndDate: null,
+                                }),
+                              );
+                            }}
+                            className="recurrence-input"
+                          />
+                          <span>times</span>
+                        </span>
                       </label>
-                      <label className="recurrence-option">
+                      <label
+                        className={`recurrence-option ${
+                          draft.recurrenceEndDate !== null ? "is-active" : ""
+                        }`}
+                      >
                         <input
                           type="radio"
                           name="recurrence-mode"
@@ -2125,22 +2392,31 @@ function App() {
                             )
                           }
                         />
-                        <span>Repeat until</span>
-                        <input
-                          type="date"
-                          value={draft.recurrenceEndDate ?? ""}
-                          disabled={draft.recurrenceEndDate === null}
-                          onChange={(event) =>
-                            setDraft((current) =>
-                              normalizeRecurrenceDraft({
-                                ...current,
-                                recurrenceCount: null,
-                                recurrenceEndDate: event.target.value,
-                              }),
-                            )
-                          }
-                          className="recurrence-input"
-                        />
+                        <span className="recurrence-option__radio" aria-hidden="true">
+                          <span className="recurrence-option__radio-dot" />
+                        </span>
+                        <span className="recurrence-option__copy">
+                          <strong>Repeat until a date</strong>
+                          <span>Stop generating occurrences on a specific date.</span>
+                        </span>
+                        <span className="recurrence-option__value">
+                          <span>Until</span>
+                          <input
+                            type="date"
+                            value={draft.recurrenceEndDate ?? ""}
+                            disabled={draft.recurrenceEndDate === null}
+                            onChange={(event) =>
+                              setDraft((current) =>
+                                normalizeRecurrenceDraft({
+                                  ...current,
+                                  recurrenceCount: null,
+                                  recurrenceEndDate: event.target.value,
+                                }),
+                              )
+                            }
+                            className="recurrence-input"
+                          />
+                        </span>
                       </label>
                     </div>
                   </div>
@@ -2474,9 +2750,119 @@ function App() {
                 </p>
               </div>
 
-              <p className="empty">
-                Categories: {CATEGORY_OPTIONS.join(", ")} · Activities: {ACTIVITY_OPTIONS.join(", ")}
-              </p>
+              <div className="settings-grid">
+                <section className="settings-taxonomy">
+                  <div className="settings-taxonomy__header">
+                    <strong>Categories</strong>
+                    <p>Used in quick add, edit forms, and sidebar filters.</p>
+                  </div>
+                  <div className="settings-option-list">
+                    {categoryOptions.map((category) => (
+                      <button
+                        key={category}
+                        type="button"
+                        className={`settings-option ${editingCategory === category ? "is-active" : ""}`}
+                        onClick={() => {
+                          setEditingCategory(category);
+                          setCategoryInput(category);
+                        }}
+                      >
+                        <span className="settings-option__name">{category}</span>
+                        <span className="settings-option__meta">
+                          {categoryUsage[category] ?? 0} tasks
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="settings-option-editor">
+                    <label>
+                      {editingCategory ? "Edit category" : "Add category"}
+                      <input
+                        value={categoryInput}
+                        onChange={(event) => setCategoryInput(event.target.value)}
+                        placeholder="e.g. Ops, Finance, Learning"
+                      />
+                    </label>
+                    <div className="settings-option-editor__actions">
+                      <button
+                        type="button"
+                        className="primary"
+                        onClick={handleSaveCategoryOption}
+                      >
+                        {editingCategory ? "Save category" : "Add category"}
+                      </button>
+                      {editingCategory ? (
+                        <button
+                          type="button"
+                          className="pill pill--ghost"
+                          onClick={resetCategoryEditor}
+                        >
+                          Cancel
+                        </button>
+                      ) : null}
+                    </div>
+                    <p className="settings-option-editor__hint">
+                      Editing a category updates existing todos that use it.
+                    </p>
+                  </div>
+                </section>
+
+                <section className="settings-taxonomy">
+                  <div className="settings-taxonomy__header">
+                    <strong>Kinds</strong>
+                    <p>Controls the kind picker inside the todo editor.</p>
+                  </div>
+                  <div className="settings-option-list">
+                    {kindOptions.map((kind) => (
+                      <button
+                        key={kind}
+                        type="button"
+                        className={`settings-option ${editingKind === kind ? "is-active" : ""}`}
+                        onClick={() => {
+                          setEditingKind(kind);
+                          setKindInput(kind);
+                        }}
+                      >
+                        <span className="settings-option__name">{kind}</span>
+                        <span className="settings-option__meta">
+                          {kindUsage[kind] ?? 0} tasks
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="settings-option-editor">
+                    <label>
+                      {editingKind ? "Edit kind" : "Add kind"}
+                      <input
+                        value={kindInput}
+                        onChange={(event) => setKindInput(event.target.value)}
+                        placeholder="e.g. research, admin, outreach"
+                      />
+                    </label>
+                    <div className="settings-option-editor__actions">
+                      <button
+                        type="button"
+                        className="primary"
+                        onClick={handleSaveKindOption}
+                      >
+                        {editingKind ? "Save kind" : "Add kind"}
+                      </button>
+                      {editingKind ? (
+                        <button
+                          type="button"
+                          className="pill pill--ghost"
+                          onClick={resetKindEditor}
+                        >
+                          Cancel
+                        </button>
+                      ) : null}
+                    </div>
+                    <p className="settings-option-editor__hint">
+                      Editing a kind updates existing todos that use it.
+                    </p>
+                  </div>
+                </section>
+              </div>
             </div>
             <div className="modal-actions">
               <button
