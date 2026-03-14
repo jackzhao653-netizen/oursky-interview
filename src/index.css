@@ -724,6 +724,11 @@ option {
   color: var(--text);
   overflow: hidden;
   background: var(--surface-2);
+  pointer-events: auto;
+}
+
+.week-task:hover {
+  cursor: pointer;
 }
 
 .week-cell__tooltip-layer {
