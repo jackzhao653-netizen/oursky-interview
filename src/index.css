@@ -724,7 +724,6 @@ option {
   color: var(--text);
   overflow: hidden;
   background: var(--surface-2);
-  pointer-events: auto;
 }
 
 .week-task:hover {

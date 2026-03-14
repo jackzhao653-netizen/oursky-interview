@@ -449,6 +449,7 @@ function WeekTodoButton({
       type="button"
       className={`week-task ${event.status !== "open" ? "is-muted" : ""}`}
       data-tooltip-side={tooltipSide}
+      title=""
       style={
         {
           "--event-accent": categoryMeta.accent,
