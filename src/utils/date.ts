@@ -1,142 +1,111 @@
-const WEEKDAY_TO_INDEX: Record<string, number> = {
-  sunday: 0,
-  monday: 1,
-  tuesday: 2,
-  wednesday: 3,
-  thursday: 4,
-  friday: 5,
-  saturday: 6,
-}
+const shortDateFormatter = new Intl.DateTimeFormat(undefined, {
+  weekday: "short",
+  month: "short",
+  day: "numeric",
+});
 
-const relativeFormatter = new Intl.DateTimeFormat(undefined, {
-  weekday: 'short',
-  month: 'short',
-  day: 'numeric',
-})
+const fullDateFormatter = new Intl.DateTimeFormat(undefined, {
+  weekday: "long",
+  month: "long",
+  day: "numeric",
+});
 
-const longFormatter = new Intl.DateTimeFormat(undefined, {
-  weekday: 'long',
-  month: 'long',
-  day: 'numeric',
-})
+const monthFormatter = new Intl.DateTimeFormat(undefined, {
+  month: "long",
+  year: "numeric",
+});
+
+const weekdayFormatter = new Intl.DateTimeFormat(undefined, {
+  weekday: "short",
+});
 
 export function getTodayKey(date = new Date()) {
-  const year = date.getFullYear()
-  const month = `${date.getMonth() + 1}`.padStart(2, '0')
-  const day = `${date.getDate()}`.padStart(2, '0')
-  return `${year}-${month}-${day}`
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export function fromDateKey(dateKey: string) {
-  return new Date(`${dateKey}T00:00:00`)
+  return new Date(`${dateKey}T00:00:00`);
 }
 
 export function addDays(date: Date, amount: number) {
-  const next = new Date(date)
-  next.setDate(next.getDate() + amount)
-  return next
+  const next = new Date(date);
+  next.setDate(next.getDate() + amount);
+  return next;
 }
 
 export function addMonths(date: Date, amount: number) {
-  const next = new Date(date)
-  next.setMonth(next.getMonth() + amount)
-  return next
+  return new Date(date.getFullYear(), date.getMonth() + amount, 1);
+}
+
+export function startOfWeek(date: Date) {
+  const next = new Date(date);
+  const offset = (next.getDay() + 6) % 7;
+  next.setDate(next.getDate() - offset);
+  next.setHours(0, 0, 0, 0);
+  return next;
 }
 
 export function getMonthLabel(date: Date) {
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'long',
-    year: 'numeric',
-  }).format(date)
+  return monthFormatter.format(date);
 }
 
-export function parseNaturalDateInput(input: string, baseDate = new Date()) {
-  const trimmed = input.trim()
-  const normalized = trimmed.toLowerCase()
-
-  if (!trimmed) {
-    return null
-  }
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    return trimmed
-  }
-
-  if (normalized === 'today') {
-    return getTodayKey(baseDate)
-  }
-
-  if (normalized === 'tomorrow') {
-    return getTodayKey(addDays(baseDate, 1))
-  }
-
-  const inDaysMatch = normalized.match(/^in\s+(\d+)\s+days?$/)
-  if (inDaysMatch) {
-    return getTodayKey(addDays(baseDate, Number(inDaysMatch[1])))
-  }
-
-  const inWeeksMatch = normalized.match(/^in\s+(\d+)\s+weeks?$/)
-  if (inWeeksMatch) {
-    return getTodayKey(addDays(baseDate, Number(inWeeksMatch[1]) * 7))
-  }
-
-  const nextWeekdayMatch = normalized.match(/^next\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)$/)
-  if (nextWeekdayMatch) {
-    const target = WEEKDAY_TO_INDEX[nextWeekdayMatch[1]]
-    const current = baseDate.getDay()
-    const delta = ((target - current + 7) % 7) || 7
-    return getTodayKey(addDays(baseDate, delta))
-  }
-
-  const weekdayMatch = normalized.match(/^(sunday|monday|tuesday|wednesday|thursday|friday|saturday)$/)
-  if (weekdayMatch) {
-    const target = WEEKDAY_TO_INDEX[weekdayMatch[1]]
-    const current = baseDate.getDay()
-    const delta = (target - current + 7) % 7
-    return getTodayKey(addDays(baseDate, delta))
-  }
-
-  const parsed = new Date(trimmed)
-  if (!Number.isNaN(parsed.getTime())) {
-    return getTodayKey(parsed)
-  }
-
-  return null
+export function getWeekLabel(date: Date) {
+  const start = startOfWeek(date);
+  const end = addDays(start, 6);
+  return `${getTodayKey(start)}..${getTodayKey(end)}`;
 }
 
-export function formatDateLabel(dateKey: string) {
-  return relativeFormatter.format(fromDateKey(dateKey))
+export function getShortDateLabel(dateKey: string) {
+  return shortDateFormatter.format(fromDateKey(dateKey));
 }
 
-export function formatLongDateLabel(dateKey: string) {
-  return longFormatter.format(fromDateKey(dateKey))
+export function getFullDateLabel(dateKey: string) {
+  return fullDateFormatter.format(fromDateKey(dateKey));
 }
 
-export function getRelativeDueLabel(dateKey: string, todayKey: string) {
-  const deltaMs = fromDateKey(dateKey).getTime() - fromDateKey(todayKey).getTime()
-  const deltaDays = Math.round(deltaMs / 86400000)
+export function getWeekdayLabel(dateKey: string) {
+  return weekdayFormatter.format(fromDateKey(dateKey));
+}
 
-  if (deltaDays === 0) {
-    return 'Due today'
+export function isSameDay(left: Date, right: Date) {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
+}
+
+export function compareDateKeys(left: string, right: string) {
+  return left.localeCompare(right);
+}
+
+export function getDateDistance(dateKey: string, todayKey: string) {
+  const deltaMs =
+    fromDateKey(dateKey).getTime() - fromDateKey(todayKey).getTime();
+  return Math.round(deltaMs / 86400000);
+}
+
+export function getRelativeDateLabel(dateKey: string, todayKey: string) {
+  const distance = getDateDistance(dateKey, todayKey);
+
+  if (distance === 0) {
+    return "Due today";
   }
 
-  if (deltaDays === 1) {
-    return 'Due tomorrow'
+  if (distance === 1) {
+    return "Due tomorrow";
   }
 
-  if (deltaDays < 0) {
-    return `Overdue by ${Math.abs(deltaDays)} day${Math.abs(deltaDays) === 1 ? '' : 's'}`
+  if (distance === -1) {
+    return "Overdue by 1 day";
   }
 
-  return formatDateLabel(dateKey)
-}
+  if (distance < 0) {
+    return `Overdue by ${Math.abs(distance)} days`;
+  }
 
-export function isOverdue(dateKey: string, todayKey: string) {
-  return fromDateKey(dateKey).getTime() < fromDateKey(todayKey).getTime()
-}
-
-export function isWithinDays(dateKey: string, todayKey: string, days: number) {
-  const deltaMs = fromDateKey(dateKey).getTime() - fromDateKey(todayKey).getTime()
-  const deltaDays = Math.round(deltaMs / 86400000)
-  return deltaDays >= 0 && deltaDays <= days
+  return getShortDateLabel(dateKey);
 }

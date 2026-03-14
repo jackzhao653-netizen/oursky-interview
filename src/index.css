@@ -1,13 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Public+Sans:wght@400;500;600;700;800&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
-  font-family:
-    'Public Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color-scheme: dark;
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   line-height: 1.5;
   font-weight: 400;
   font-synthesis: none;
@@ -15,56 +14,27 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  --bg-base: #f4f6f2;
-  --bg-elevated: rgba(255, 255, 255, 0.8);
-  --bg-elevated-strong: rgba(255, 255, 255, 0.94);
-  --bg-muted: #e8edf2;
-  --bg-muted-strong: #dbe4ed;
-  --bg-inset: rgba(236, 240, 244, 0.82);
-  --bg-hero: rgba(255, 255, 255, 0.66);
-  --border-soft: rgba(148, 163, 184, 0.18);
-  --border-strong: rgba(100, 116, 139, 0.28);
-  --text-primary: #0f172a;
-  --text-secondary: #334155;
-  --text-muted: #64748b;
-  --text-subtle: #94a3b8;
-  --accent: #1d4ed8;
-  --accent-soft: rgba(29, 78, 216, 0.12);
-  --accent-strong: #0f3ca8;
-  --accent-contrast: #ffffff;
-  --success-soft: rgba(22, 163, 74, 0.12);
-  --warning-soft: rgba(245, 158, 11, 0.14);
-  --danger-soft: rgba(225, 29, 72, 0.12);
-  --shadow-panel: 0 28px 80px -48px rgba(15, 23, 42, 0.38);
-  --shadow-soft: 0 20px 48px -34px rgba(15, 23, 42, 0.28);
-  --ring: rgba(37, 99, 235, 0.24);
-}
-
-html[data-theme='dark'] {
-  color-scheme: dark;
-  --bg-base: #08111f;
-  --bg-elevated: rgba(12, 23, 41, 0.78);
-  --bg-elevated-strong: rgba(10, 19, 34, 0.92);
-  --bg-muted: #122338;
-  --bg-muted-strong: #16304b;
-  --bg-inset: rgba(5, 12, 23, 0.46);
-  --bg-hero: rgba(8, 18, 32, 0.78);
-  --border-soft: rgba(148, 163, 184, 0.16);
-  --border-strong: rgba(148, 163, 184, 0.28);
-  --text-primary: #e2e8f0;
-  --text-secondary: #cbd5e1;
-  --text-muted: #94a3b8;
-  --text-subtle: #64748b;
+  --bg0: #0b1220;
+  --bg1: #0f1c31;
+  --bg2: #122743;
+  --panel: rgba(255, 255, 255, 0.06);
+  --panel-strong: rgba(7, 14, 27, 0.84);
+  --stroke: rgba(255, 255, 255, 0.1);
+  --stroke-strong: rgba(255, 255, 255, 0.16);
+  --text: rgba(255, 255, 255, 0.94);
+  --muted: rgba(255, 255, 255, 0.7);
+  --muted2: rgba(255, 255, 255, 0.5);
   --accent: #6ee7ff;
-  --accent-soft: rgba(110, 231, 255, 0.12);
-  --accent-strong: #38bdf8;
-  --accent-contrast: #082032;
-  --success-soft: rgba(52, 211, 153, 0.16);
-  --warning-soft: rgba(250, 204, 21, 0.16);
-  --danger-soft: rgba(251, 113, 133, 0.14);
-  --shadow-panel: 0 28px 80px -42px rgba(0, 0, 0, 0.62);
-  --shadow-soft: 0 22px 48px -34px rgba(0, 0, 0, 0.56);
-  --ring: rgba(110, 231, 255, 0.22);
+  --accent-soft: rgba(110, 231, 255, 0.14);
+  --danger: #ff8d8d;
+  --success: #7ef2bb;
+  --warning: #ffd479;
+  --shadow: 0 24px 80px rgba(0, 0, 0, 0.46);
+  --radius: 18px;
+  --radius2: 12px;
+  --mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
 }
 
 * {
@@ -79,15 +49,24 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  color: var(--text-primary);
+  color: var(--text);
   background:
-    radial-gradient(circle at 14% 16%, rgba(59, 130, 246, 0.18), transparent 22%),
-    radial-gradient(circle at 84% 12%, rgba(14, 165, 233, 0.14), transparent 26%),
-    radial-gradient(circle at 78% 80%, rgba(16, 185, 129, 0.12), transparent 24%),
-    linear-gradient(160deg, var(--bg-base) 0%, color-mix(in srgb, var(--bg-base) 92%, #ffffff 8%) 100%);
-  transition:
-    background-color 180ms ease,
-    color 180ms ease;
+    radial-gradient(
+      1100px 520px at 12% 0%,
+      rgba(110, 231, 255, 0.18),
+      transparent 58%
+    ),
+    radial-gradient(
+      940px 460px at 84% 8%,
+      rgba(167, 139, 250, 0.14),
+      transparent 62%
+    ),
+    radial-gradient(
+      900px 520px at 50% 100%,
+      rgba(52, 211, 153, 0.09),
+      transparent 60%
+    ),
+    linear-gradient(180deg, var(--bg0), var(--bg1) 46%, var(--bg2));
 }
 
 button,
@@ -104,16 +83,13 @@ button {
 button,
 input,
 select,
-textarea,
-section,
-aside,
-article,
-div {
+textarea {
   transition:
-    background-color 180ms ease,
-    border-color 180ms ease,
-    color 180ms ease,
-    box-shadow 180ms ease;
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease,
+    transform 120ms ease,
+    box-shadow 160ms ease;
 }
 
 ::selection {
@@ -124,7 +100,588 @@ div {
   min-height: 100vh;
 }
 
-.font-display {
-  font-family:
-    'Instrument Serif', Georgia, Cambria, 'Times New Roman', Times, serif;
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  backdrop-filter: blur(18px);
+  background: rgba(7, 12, 23, 0.72);
+  border-bottom: 1px solid var(--stroke);
+}
+
+.wrap {
+  width: min(1280px, calc(100vw - 32px));
+  margin: 0 auto;
+}
+
+.site-header .wrap {
+  padding: 18px 0;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 14px;
+  padding: 18px 0 24px;
+}
+
+.top {
+  display: flex;
+  gap: 18px;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.brand {
+  display: flex;
+  gap: 18px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.brand h1,
+.day-header h3 {
+  margin: 0;
+  font-family: "Bricolage Grotesque", ui-sans-serif, sans-serif;
+  font-size: clamp(1.8rem, 3vw, 2.6rem);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+}
+
+.brand-copy {
+  max-width: 420px;
+  color: var(--muted);
+  font-size: 0.94rem;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.header-pills {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.quick-add,
+.nav-row,
+.view-toolbar,
+.todo-card__heading,
+.todo-card__meta,
+.todo-card__top,
+.modal-actions,
+.checklist-editor__header,
+.status-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.quick-add {
+  margin-top: 18px;
+}
+
+.quick-add input:first-child {
+  min-width: 260px;
+  flex: 1 1 320px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  animation: fade-up 420ms ease both;
+}
+
+.panel h2 {
+  margin: 0;
+  padding: 14px;
+  border-bottom: 1px solid var(--stroke);
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.88);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.body {
+  padding: 14px;
+}
+
+.sidebar,
+.main-panel,
+.list,
+.task-stack,
+.mini-calendar,
+.day-view,
+.checklist-editor__list,
+.modal-form {
+  display: grid;
+  gap: 12px;
+}
+
+.main-panel .body {
+  gap: 14px;
+}
+
+.main-panel {
+  min-width: 0;
+}
+
+.mini-calendar {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.dow {
+  color: var(--muted2);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.mini-day,
+.week-cell,
+.todo-card,
+.top3-item,
+.checklist-editor__item {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.mini-day {
+  min-height: 54px;
+  padding: 8px 6px;
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  color: var(--text);
+}
+
+.mini-day em {
+  font-style: normal;
+  font-size: 0.68rem;
+  color: var(--accent);
+}
+
+.mini-day.is-outside {
+  opacity: 0.42;
+}
+
+.mini-day.is-today {
+  outline: 1px solid rgba(110, 231, 255, 0.3);
+}
+
+.mini-day.is-selected {
+  background: rgba(110, 231, 255, 0.14);
+  border-color: rgba(110, 231, 255, 0.34);
+}
+
+.sidebar-group {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.sidebar-label {
+  color: var(--muted2);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.toggle-row,
+.check-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.toggle-row {
+  color: var(--muted);
+}
+
+.toggle-row input,
+.check-item input {
+  width: auto;
+  accent-color: var(--accent);
+}
+
+.top3-item {
+  padding: 12px;
+  text-align: left;
+  color: var(--text);
+}
+
+.top3-item__title {
+  display: block;
+  font-weight: 600;
+}
+
+.top3-item__meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  color: var(--muted2);
+  font-size: 0.76rem;
+}
+
+.detail-title {
+  margin: 0;
+  font-weight: 600;
+  font-size: 1.02rem;
+}
+
+.detail-copy,
+.todo-card__summary,
+.todo-card__notes,
+.empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.view-toolbar {
+  justify-content: space-between;
+}
+
+.notice {
+  border: 1px solid rgba(255, 212, 121, 0.34);
+  background: rgba(255, 212, 121, 0.12);
+  color: rgba(255, 238, 200, 0.96);
+  padding: 10px 12px;
+  border-radius: 12px;
+}
+
+.day-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.week-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.week-cell {
+  padding: 12px;
+  min-width: 0;
+}
+
+.week-cell.is-today,
+.todo-card.is-selected {
+  border-color: rgba(110, 231, 255, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(110, 231, 255, 0.16);
+}
+
+.week-cell.is-selected {
+  background: rgba(110, 231, 255, 0.06);
+}
+
+.week-cell__header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--text);
+}
+
+.mono {
+  font-family: var(--mono);
+}
+
+.todo-card {
+  padding: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.todo-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--event-accent, var(--accent));
+}
+
+.todo-card.is-muted {
+  opacity: 0.72;
+}
+
+.todo-card__top {
+  align-items: flex-start;
+}
+
+.todo-card__content {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  flex: 1;
+}
+
+.todo-card h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.todo-card__heading p {
+  margin: 4px 0 0;
+  color: var(--muted2);
+  font-size: 0.78rem;
+}
+
+.todo-card__meta {
+  gap: 8px;
+}
+
+.todo-card__checklist {
+  display: grid;
+  gap: 8px;
+}
+
+.todo-toggle {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  background: transparent;
+  margin-top: 4px;
+}
+
+.todo-toggle.is-done {
+  background: var(--success);
+  border-color: var(--success);
+  box-shadow: 0 0 0 3px rgba(126, 242, 187, 0.14);
+}
+
+.check-item {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.check-item.is-done span {
+  color: var(--muted2);
+  text-decoration: line-through;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--stroke);
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: rgba(0, 0, 0, 0.18);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.72rem;
+}
+
+.pill--ghost {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.pill--ghost.is-focus,
+.toggle-pill.is-active {
+  border-color: rgba(110, 231, 255, 0.45);
+  background: rgba(110, 231, 255, 0.12);
+  color: white;
+}
+
+.pill--status.status-done {
+  border-color: rgba(126, 242, 187, 0.32);
+  color: rgba(204, 255, 229, 0.92);
+}
+
+.pill--status.status-cancelled {
+  border-color: rgba(255, 141, 141, 0.28);
+  color: rgba(255, 208, 208, 0.9);
+}
+
+input,
+select,
+textarea,
+.toggle-pill {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text);
+  padding: 11px 12px;
+  border-radius: 12px;
+  outline: none;
+}
+
+textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible {
+  border-color: rgba(110, 231, 255, 0.45);
+  box-shadow: 0 0 0 4px rgba(110, 231, 255, 0.12);
+}
+
+button {
+  appearance: none;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  padding: 9px 12px;
+  border-radius: 11px;
+}
+
+button:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+button.primary {
+  border-color: rgba(110, 231, 255, 0.44);
+  background: rgba(110, 231, 255, 0.12);
+}
+
+button.danger {
+  border-color: rgba(255, 141, 141, 0.34);
+  background: rgba(255, 141, 141, 0.1);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+label {
+  display: grid;
+  gap: 7px;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+.status-row {
+  gap: 8px;
+}
+
+.checklist-editor {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 12px;
+}
+
+.checklist-editor__header {
+  justify-content: space-between;
+}
+
+.checklist-editor__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.56);
+  backdrop-filter: blur(6px);
+}
+
+.modal {
+  width: min(760px, 100%);
+  background: rgba(7, 14, 27, 0.96);
+}
+
+.modal-form {
+  gap: 14px;
+}
+
+.modal-actions {
+  justify-content: space-between;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (min-width: 1120px) {
+  .week-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .week-cell {
+    min-height: 100%;
+  }
+}
+
+@media (max-width: 1024px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .wrap {
+    width: min(100vw - 20px, 1280px);
+  }
+
+  .quick-add {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .form-grid,
+  .modal-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .checklist-editor__item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .checklist-editor__item button {
+    grid-column: 1 / -1;
+  }
 }

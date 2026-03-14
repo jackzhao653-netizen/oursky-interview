@@ -1,415 +1,1331 @@
-import { useEffect, useMemo, useState } from 'react'
-import { CalendarBoard } from './components/CalendarBoard'
-import { FilterPanel } from './components/FilterPanel'
-import { ProjectBoard } from './components/ProjectBoard'
-import { ProjectSidebar } from './components/ProjectSidebar'
-import { ScheduleBoard } from './components/ScheduleBoard'
-import { TaskComposer } from './components/TaskComposer'
-import { TaskInspector } from './components/TaskInspector'
-import { Top3Section } from './components/Top3Section'
+import { type CSSProperties, type FormEvent, useEffect, useState } from "react";
 import {
-  filterVisibleTasks,
-  selectTasksDueOn,
-  selectTasksForProject,
-  selectTop3Tasks,
-  selectUpcomingTasks,
-  useTaskStore,
-} from './store/useTaskStore'
-import { addDays, addMonths, getTodayKey } from './utils/date'
+  CATEGORY_OPTIONS,
+  PRIORITY_LEVELS,
+  TOP3_LIMIT,
+  TODO_KINDS,
+  type ChecklistItem,
+  type PriorityLevel,
+  type TodoEvent,
+  type TodoEventFile,
+  type TodoFilters,
+} from "./types/todo";
+import {
+  addDays,
+  addMonths,
+  compareDateKeys,
+  fromDateKey,
+  getFullDateLabel,
+  getMonthLabel,
+  getRelativeDateLabel,
+  getShortDateLabel,
+  getTodayKey,
+  getWeekLabel,
+  getWeekdayLabel,
+  startOfWeek,
+} from "./utils/date";
+import {
+  createEmptyTodoEvent,
+  loadEventFile,
+  saveEventFile,
+  sortEvents,
+} from "./utils/storage";
 
-type Theme = 'light' | 'dark'
+type ModalState = {
+  open: boolean;
+  eventId: string | null;
+};
 
-const THEME_STORAGE_KEY = 'oursky-ui-theme'
+type QuickAddState = {
+  title: string;
+  date: string;
+  course: string;
+  priority: PriorityLevel;
+};
 
-function getInitialTheme(): Theme {
-  if (typeof window === 'undefined') {
-    return 'light'
+const DEFAULT_FILTERS: TodoFilters = {
+  showOpen: true,
+  showDone: false,
+  showCancelled: false,
+  hiddenCourses: [],
+};
+
+const CATEGORY_META: Record<
+  string,
+  { accent: string; soft: string; border: string }
+> = {
+  Product: {
+    accent: "#fbbf24",
+    soft: "rgba(251,191,36,0.14)",
+    border: "rgba(251,191,36,0.35)",
+  },
+  Client: {
+    accent: "#60a5fa",
+    soft: "rgba(96,165,250,0.14)",
+    border: "rgba(96,165,250,0.35)",
+  },
+  Studio: {
+    accent: "#34d399",
+    soft: "rgba(52,211,153,0.14)",
+    border: "rgba(52,211,153,0.35)",
+  },
+  Personal: {
+    accent: "#fb7185",
+    soft: "rgba(251,113,133,0.14)",
+    border: "rgba(251,113,133,0.35)",
+  },
+};
+
+function getCategoryMeta(course: string) {
+  return (
+    CATEGORY_META[course] ?? {
+      accent: "#a78bfa",
+      soft: "rgba(167,139,250,0.14)",
+      border: "rgba(167,139,250,0.35)",
+    }
+  );
+}
+
+function getChecklistSummary(checklist: ChecklistItem[]) {
+  const completed = checklist.filter((item) => item.done).length;
+  return `${completed}/${checklist.length} checked`;
+}
+
+function getTimeLabel(event: TodoEvent) {
+  if (event.start && event.end) {
+    return `${event.start}-${event.end}`;
   }
 
-  const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY)
-  if (savedTheme === 'light' || savedTheme === 'dark') {
-    return savedTheme
+  if (event.start) {
+    return event.start;
   }
 
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  return "All-day";
+}
+
+function createMiniMonthDays(monthDate: Date) {
+  const firstDay = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const lastDay = new Date(
+    monthDate.getFullYear(),
+    monthDate.getMonth() + 1,
+    0,
+  );
+  const start = startOfWeek(firstDay);
+  const end = addDays(startOfWeek(lastDay), 6);
+  const days: Date[] = [];
+
+  for (let day = new Date(start); day <= end; day = addDays(day, 1)) {
+    days.push(day);
+  }
+
+  return days;
+}
+
+function matchesFilters(event: TodoEvent, filters: TodoFilters) {
+  const matchesStatus =
+    (filters.showOpen && event.status === "open") ||
+    (filters.showDone && event.status === "done") ||
+    (filters.showCancelled && event.status === "cancelled");
+
+  if (!matchesStatus) {
+    return false;
+  }
+
+  return !filters.hiddenCourses.includes(event.course);
+}
+
+function updateEventStatus(event: TodoEvent, status: TodoEvent["status"]) {
+  const completedAt = status === "done" ? new Date().toISOString() : null;
+  return {
+    ...event,
+    status,
+    completedAt,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+type TodoCardProps = {
+  event: TodoEvent;
+  todayKey: string;
+  isSelected: boolean;
+  onOpen: () => void;
+  onToggleTodo: () => void;
+  onToggleChecklistItem: (itemId: string) => void;
+  onToggleTop3: () => void;
+};
+
+function TodoCard({
+  event,
+  todayKey,
+  isSelected,
+  onOpen,
+  onToggleTodo,
+  onToggleChecklistItem,
+  onToggleTop3,
+}: TodoCardProps) {
+  const categoryMeta = getCategoryMeta(event.course);
+  const checklistPreview = event.checklist.slice(0, 3);
+  const checklistSummary =
+    event.checklist.length > 0 ? getChecklistSummary(event.checklist) : null;
+  const statusLabel = event.status[0].toUpperCase() + event.status.slice(1);
+  const isFocus = event.top3Date === todayKey;
+
+  return (
+    <article
+      className={`todo-card ${event.status !== "open" ? "is-muted" : ""} ${isSelected ? "is-selected" : ""}`}
+      style={
+        {
+          "--event-accent": categoryMeta.accent,
+          "--event-soft": categoryMeta.soft,
+        } as CSSProperties
+      }
+      onClick={onOpen}
+    >
+      <div className="todo-card__top">
+        <button
+          type="button"
+          className={`todo-toggle ${event.status === "done" ? "is-done" : ""}`}
+          aria-label={
+            event.status === "done" ? "Mark todo open" : "Mark todo done"
+          }
+          onClick={(actionEvent) => {
+            actionEvent.stopPropagation();
+            onToggleTodo();
+          }}
+        />
+
+        <div className="todo-card__content">
+          <div className="todo-card__heading">
+            <div>
+              <h3>{event.title}</h3>
+              <p>{getRelativeDateLabel(event.date, todayKey)}</p>
+            </div>
+
+            <button
+              type="button"
+              className={`pill pill--ghost ${isFocus ? "is-focus" : ""}`}
+              onClick={(actionEvent) => {
+                actionEvent.stopPropagation();
+                onToggleTop3();
+              }}
+            >
+              {isFocus ? "Top 3" : "Pin Top 3"}
+            </button>
+          </div>
+
+          <div className="todo-card__meta">
+            <span
+              className="pill"
+              style={{
+                borderColor: categoryMeta.border,
+                background: categoryMeta.soft,
+              }}
+            >
+              {event.course}
+            </span>
+            <span className="pill">{event.kind}</span>
+            <span className="pill">{event.priority}</span>
+            <span className={`pill pill--status status-${event.status}`}>
+              {statusLabel}
+            </span>
+            <span className="pill">{getTimeLabel(event)}</span>
+          </div>
+
+          {checklistSummary ? (
+            <p className="todo-card__summary">{checklistSummary}</p>
+          ) : null}
+
+          {checklistPreview.length > 0 ? (
+            <div className="todo-card__checklist">
+              {checklistPreview.map((item) => (
+                <label
+                  key={item.id}
+                  className={`check-item ${item.done ? "is-done" : ""}`}
+                  onClick={(actionEvent) => actionEvent.stopPropagation()}
+                >
+                  <input
+                    type="checkbox"
+                    checked={item.done}
+                    onChange={() => onToggleChecklistItem(item.id)}
+                  />
+                  <span>{item.text}</span>
+                </label>
+              ))}
+            </div>
+          ) : null}
+
+          {event.notes ? (
+            <p className="todo-card__notes">{event.notes}</p>
+          ) : null}
+        </div>
+      </div>
+    </article>
+  );
 }
 
 function App() {
-  const [theme, setTheme] = useState<Theme>(() => getInitialTheme())
-
-  const hydrate = useTaskStore((state) => state.hydrate)
-  const projects = useTaskStore((state) => state.projects)
-  const sections = useTaskStore((state) => state.sections)
-  const labels = useTaskStore((state) => state.labels)
-  const filters = useTaskStore((state) => state.filters)
-  const savedFilters = useTaskStore((state) => state.savedFilters)
-  const activeSavedFilterId = useTaskStore((state) => state.activeSavedFilterId)
-  const tasks = useTaskStore((state) => state.tasks)
-  const rolloverItems = useTaskStore((state) => state.rolloverItems)
-  const isLoaded = useTaskStore((state) => state.isHydrated)
-  const limitMessage = useTaskStore((state) => state.limitMessage)
-  const activeProjectId = useTaskStore((state) => state.activeProjectId)
-  const activeView = useTaskStore((state) => state.activeView)
-  const addTask = useTaskStore((state) => state.addTask)
-  const toggleTask = useTaskStore((state) => state.toggleTask)
-  const deleteTask = useTaskStore((state) => state.deleteTask)
-  const toggleTop3 = useTaskStore((state) => state.toggleTop3)
-  const restoreRollover = useTaskStore((state) => state.restoreRollover)
-  const dismissRollover = useTaskStore((state) => state.dismissRollover)
-  const restoreAllRollovers = useTaskStore((state) => state.restoreAllRollovers)
-  const addProject = useTaskStore((state) => state.addProject)
-  const addSection = useTaskStore((state) => state.addSection)
-  const toggleProjectCollapsed = useTaskStore((state) => state.toggleProjectCollapsed)
-  const setActiveView = useTaskStore((state) => state.setActiveView)
-  const setActiveProject = useTaskStore((state) => state.setActiveProject)
-  const selectTask = useTaskStore((state) => state.selectTask)
-  const selectedTaskId = useTaskStore((state) => state.selectedTaskId)
-  const addLabel = useTaskStore((state) => state.addLabel)
-  const setFilters = useTaskStore((state) => state.setFilters)
-  const resetFilters = useTaskStore((state) => state.resetFilters)
-  const saveCurrentFilter = useTaskStore((state) => state.saveCurrentFilter)
-  const applySavedFilter = useTaskStore((state) => state.applySavedFilter)
-  const deleteSavedFilter = useTaskStore((state) => state.deleteSavedFilter)
-  const updateTask = useTaskStore((state) => state.updateTask)
-  const clearLimitMessage = useTaskStore((state) => state.clearLimitMessage)
+  const todayKey = getTodayKey();
+  const [file, setFile] = useState<TodoEventFile>({ version: 1, events: [] });
+  const [isReady, setIsReady] = useState(false);
+  const [view, setView] = useState<"day" | "week">("week");
+  const [cursorDate, setCursorDate] = useState(() => fromDateKey(todayKey));
+  const [selectedDateKey, setSelectedDateKey] = useState(todayKey);
+  const [miniMonthDate, setMiniMonthDate] = useState(
+    () => new Date(fromDateKey(todayKey)),
+  );
+  const [filters, setFilters] = useState<TodoFilters>(DEFAULT_FILTERS);
+  const [modal, setModal] = useState<ModalState>({
+    open: false,
+    eventId: null,
+  });
+  const [draft, setDraft] = useState(() => createEmptyTodoEvent(todayKey));
+  const [notice, setNotice] = useState("");
+  const [quickAdd, setQuickAdd] = useState<QuickAddState>({
+    title: "",
+    date: todayKey,
+    course: CATEGORY_OPTIONS[0],
+    priority: "P2",
+  });
 
   useEffect(() => {
-    void hydrate()
-  }, [hydrate])
+    void (async () => {
+      const loaded = await loadEventFile();
+      setFile({
+        version: loaded.version,
+        events: sortEvents(loaded.events),
+      });
+      setIsReady(true);
+    })();
+  }, []);
 
   useEffect(() => {
-    if (!limitMessage) {
-      return
+    if (!isReady) {
+      return;
     }
 
-    const timer = window.setTimeout(() => clearLimitMessage(), 2500)
-    return () => window.clearTimeout(timer)
-  }, [clearLimitMessage, limitMessage])
+    saveEventFile(file);
+  }, [file, isReady]);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme
-    window.localStorage.setItem(THEME_STORAGE_KEY, theme)
-  }, [theme])
-
-  const today = useMemo(() => getTodayKey(), [])
-  const [calendarMonth, setCalendarMonth] = useState(() => new Date(`${today}T00:00:00`))
-  const [selectedCalendarDateKey, setSelectedCalendarDateKey] = useState(today)
-
-  const filteredTasks = filterVisibleTasks(tasks, filters).filter((task) => {
-    if (filters.dueScope === 'today') {
-      return task.dueDate === today
+    if (!notice) {
+      return;
     }
 
-    if (filters.dueScope === 'upcoming') {
-      return task.dueDate !== null && task.dueDate > today
-    }
+    const timer = window.setTimeout(() => setNotice(""), 2200);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
-    if (filters.dueScope === 'overdue') {
-      return task.dueDate !== null && task.dueDate < today
-    }
+  const courseOptions = Array.from(
+    new Set([...CATEGORY_OPTIONS, ...file.events.map((event) => event.course)]),
+  );
+  const visibleEvents = file.events.filter((event) =>
+    matchesFilters(event, filters),
+  );
+  const selectedDateEvents = visibleEvents.filter(
+    (event) => event.date === selectedDateKey,
+  );
+  const todayEvents = file.events.filter(
+    (event) => event.date === todayKey && event.status === "open",
+  );
+  const top3Events = file.events
+    .filter((event) => event.top3Date === todayKey && event.status === "open")
+    .sort((left, right) => compareDateKeys(left.date, right.date));
+  const openCount = file.events.filter(
+    (event) => event.status === "open",
+  ).length;
+  const doneCount = file.events.filter(
+    (event) => event.status === "done",
+  ).length;
+  const overdueCount = file.events.filter(
+    (event) =>
+      event.status === "open" && compareDateKeys(event.date, todayKey) < 0,
+  ).length;
+  const selectedDateLabel = getFullDateLabel(selectedDateKey);
+  const mainLabel = view === "day" ? selectedDateKey : getWeekLabel(cursorDate);
+  const weekDays = Array.from({ length: 7 }, (_, index) =>
+    addDays(startOfWeek(cursorDate), index),
+  );
+  const miniMonthDays = createMiniMonthDays(miniMonthDate);
+  const eventsByDate = visibleEvents.reduce<Record<string, TodoEvent[]>>(
+    (grouped, event) => {
+      grouped[event.date] ??= [];
+      grouped[event.date].push(event);
+      return grouped;
+    },
+    {},
+  );
 
-    return true
-  })
-
-  const visibleProjectId = filters.projectId ?? activeProjectId
-  const activeProject = projects.find((project) => project.id === visibleProjectId) ?? null
-  const projectSections = sections.filter((section) => section.projectId === visibleProjectId)
-  const projectTasks = selectTasksForProject(filteredTasks, visibleProjectId)
-  const top3Todos = selectTop3Tasks(tasks, today)
-  const suggestedP1Todos = tasks
-    .filter(
-      (task) =>
-        task.parentTaskId === null &&
-        task.priority === 'P1' &&
-        !task.completed &&
-        task.top3Date !== today,
-    )
-    .slice(0, 3)
-  const todayTasks = selectTasksDueOn(filteredTasks, today)
-  const upcomingTasks = selectUpcomingTasks(filteredTasks, today, 7)
-  const priorityIds = new Set(top3Todos.map((todo) => todo.id))
-  const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null
-  const upcomingGroups = Array.from({ length: 7 }, (_, offset) => {
-    const dateKey = getTodayKey(addDays(new Date(`${today}T00:00:00`), offset + 1))
-    return {
-      title: offset === 0 ? 'Tomorrow' : `In ${offset + 1} days`,
-      dateKey,
-      tasks: upcomingTasks.filter((task) => task.dueDate === dateKey),
-    }
-  }).filter((group) => group.tasks.length > 0)
-
-  const rootTasks = tasks.filter((task) => task.parentTaskId === null)
-  const openRootTasks = rootTasks.filter((task) => !task.completed)
-  const projectTaskCounts = projects.reduce<Record<string, number>>((accumulator, project) => {
-    accumulator[project.id] = rootTasks.filter((task) => task.projectId === project.id).length
-    return accumulator
-  }, {})
-  const calendarCount = filteredTasks.filter((task) => {
-    if (task.parentTaskId !== null || !task.dueDate) {
-      return false
-    }
-
-    const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1).getTime()
-    const monthEnd = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0).getTime()
-    const dueTime = new Date(`${task.dueDate}T00:00:00`).getTime()
-    return dueTime >= monthStart && dueTime <= monthEnd
-  }).length
-  const overdueCount = openRootTasks.filter((task) => task.dueDate !== null && task.dueDate < today).length
-
-  const headerStats = [
-    { label: 'Open tasks', value: openRootTasks.length },
-    { label: 'Due today', value: todayTasks.length },
-    { label: 'Next 7 days', value: upcomingTasks.length },
-    { label: "Today's focus", value: `${top3Todos.length}/3` },
-  ]
-
-  const viewSummary =
-    activeView === 'project'
-      ? 'Project workflow board'
-      : activeView === 'today'
-        ? "Today's scheduled tasks"
-        : activeView === 'upcoming'
-          ? 'Next 7 days'
-          : 'Calendar planner'
-
-  const handleChangeMonth = (offset: number) => {
-    const nextMonth = addMonths(calendarMonth, offset)
-    const normalizedMonth = new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 1)
-    setCalendarMonth(normalizedMonth)
-    setSelectedCalendarDateKey(getTodayKey(normalizedMonth))
+  function applyEvents(updater: (events: TodoEvent[]) => TodoEvent[]) {
+    setFile((current) => ({
+      version: current.version,
+      events: sortEvents(updater(current.events)),
+    }));
   }
 
-  const handleSelectCalendarDate = (dateKey: string) => {
-    setSelectedCalendarDateKey(dateKey)
-    const nextDate = new Date(`${dateKey}T00:00:00`)
-    if (
-      nextDate.getFullYear() !== calendarMonth.getFullYear() ||
-      nextDate.getMonth() !== calendarMonth.getMonth()
-    ) {
-      setCalendarMonth(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1))
-    }
+  function openNewModal(dateKey = selectedDateKey) {
+    setDraft(createEmptyTodoEvent(dateKey));
+    setModal({ open: true, eventId: null });
   }
 
-  const handleJumpToToday = () => {
-    const todayDate = new Date(`${today}T00:00:00`)
-    setCalendarMonth(todayDate)
-    setSelectedCalendarDateKey(today)
+  function openEditModal(event: TodoEvent) {
+    setDraft({
+      ...event,
+      checklist: event.checklist.map((item) => ({ ...item })),
+    });
+    setModal({ open: true, eventId: event.id });
+  }
+
+  function closeModal() {
+    setModal({ open: false, eventId: null });
+  }
+
+  function updateChecklistItem(
+    itemId: string,
+    updater: (item: ChecklistItem) => ChecklistItem,
+  ) {
+    setDraft((current) => ({
+      ...current,
+      checklist: current.checklist.map((item) =>
+        item.id === itemId ? updater(item) : item,
+      ),
+    }));
+  }
+
+  function ensureTop3Limit(eventId: string | null, wantsTop3: boolean) {
+    if (!wantsTop3) {
+      return true;
+    }
+
+    const currentCount = file.events.filter(
+      (event) =>
+        event.top3Date === todayKey &&
+        event.status === "open" &&
+        event.id !== eventId,
+    ).length;
+
+    if (currentCount >= TOP3_LIMIT) {
+      setNotice("Daily Top 3 is full.");
+      return false;
+    }
+
+    return true;
+  }
+
+  function handleSaveDraft(submitEvent: FormEvent<HTMLFormElement>) {
+    submitEvent.preventDefault();
+
+    const title = draft.title.trim();
+    if (!title) {
+      setNotice("Title is required.");
+      return;
+    }
+
+    const cleanedChecklist = draft.checklist
+      .map((item) => ({ ...item, text: item.text.trim() }))
+      .filter((item) => item.text.length > 0);
+    const wantsTop3 = draft.top3Date === todayKey;
+
+    if (!ensureTop3Limit(modal.eventId, wantsTop3)) {
+      return;
+    }
+
+    const nextEvent: TodoEvent = {
+      ...draft,
+      title,
+      checklist: cleanedChecklist,
+      updatedAt: new Date().toISOString(),
+      completedAt:
+        draft.status === "done"
+          ? (draft.completedAt ?? new Date().toISOString())
+          : null,
+      top3Date: wantsTop3 ? todayKey : null,
+    };
+
+    applyEvents((events) => {
+      if (!modal.eventId) {
+        return [...events, nextEvent];
+      }
+
+      return events.map((event) =>
+        event.id === modal.eventId ? nextEvent : event,
+      );
+    });
+
+    setSelectedDateKey(nextEvent.date);
+    setCursorDate(fromDateKey(nextEvent.date));
+    setMiniMonthDate(new Date(fromDateKey(nextEvent.date)));
+    setQuickAdd((current) => ({ ...current, date: nextEvent.date }));
+    closeModal();
+  }
+
+  function handleQuickAdd(submitEvent: FormEvent<HTMLFormElement>) {
+    submitEvent.preventDefault();
+
+    const title = quickAdd.title.trim();
+    if (!title) {
+      return;
+    }
+
+    const nextEvent = createEmptyTodoEvent(quickAdd.date);
+    nextEvent.title = title;
+    nextEvent.course = quickAdd.course;
+    nextEvent.priority = quickAdd.priority;
+    nextEvent.order = Date.now();
+
+    applyEvents((events) => [...events, nextEvent]);
+    setQuickAdd((current) => ({ ...current, title: "" }));
+    setSelectedDateKey(quickAdd.date);
+    setCursorDate(fromDateKey(quickAdd.date));
+    setMiniMonthDate(new Date(fromDateKey(quickAdd.date)));
+  }
+
+  function handleToggleTodo(eventId: string) {
+    applyEvents((events) =>
+      events.map((event) => {
+        if (event.id !== eventId) {
+          return event;
+        }
+
+        return updateEventStatus(
+          event,
+          event.status === "done" ? "open" : "done",
+        );
+      }),
+    );
+  }
+
+  function handleToggleChecklistItem(eventId: string, itemId: string) {
+    applyEvents((events) =>
+      events.map((event) => {
+        if (event.id !== eventId) {
+          return event;
+        }
+
+        return {
+          ...event,
+          updatedAt: new Date().toISOString(),
+          checklist: event.checklist.map((item) =>
+            item.id === itemId
+              ? {
+                  ...item,
+                  done: !item.done,
+                }
+              : item,
+          ),
+        };
+      }),
+    );
+  }
+
+  function handleToggleTop3(eventId: string) {
+    const event = file.events.find((candidate) => candidate.id === eventId);
+    if (!event) {
+      return;
+    }
+
+    if (event.top3Date === todayKey) {
+      applyEvents((events) =>
+        events.map((candidate) =>
+          candidate.id === eventId
+            ? {
+                ...candidate,
+                top3Date: null,
+                updatedAt: new Date().toISOString(),
+              }
+            : candidate,
+        ),
+      );
+      return;
+    }
+
+    if (!ensureTop3Limit(eventId, true)) {
+      return;
+    }
+
+    applyEvents((events) =>
+      events.map((candidate) =>
+        candidate.id === eventId
+          ? {
+              ...candidate,
+              top3Date: todayKey,
+              updatedAt: new Date().toISOString(),
+            }
+          : candidate,
+      ),
+    );
+  }
+
+  function handleDeleteDraft() {
+    if (!modal.eventId) {
+      return;
+    }
+
+    applyEvents((events) =>
+      events.filter((event) => event.id !== modal.eventId),
+    );
+    closeModal();
+  }
+
+  function handleDraftStatus(status: TodoEvent["status"]) {
+    setDraft((current) => updateEventStatus(current, status));
+  }
+
+  function changeCursor(step: number) {
+    const nextDate = addDays(cursorDate, view === "day" ? step : step * 7);
+    setCursorDate(nextDate);
+    setSelectedDateKey(getTodayKey(nextDate));
+    setMiniMonthDate(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1));
+    setQuickAdd((current) => ({ ...current, date: getTodayKey(nextDate) }));
+  }
+
+  function jumpToToday() {
+    const todayDate = fromDateKey(todayKey);
+    setCursorDate(todayDate);
+    setSelectedDateKey(todayKey);
+    setMiniMonthDate(
+      new Date(todayDate.getFullYear(), todayDate.getMonth(), 1),
+    );
+    setQuickAdd((current) => ({ ...current, date: todayKey }));
   }
 
   return (
-    <main className="min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-[1520px] space-y-6">
-        <header className="overflow-hidden rounded-[40px] border border-[color:var(--border-soft)] bg-[var(--bg-hero)] px-6 py-7 shadow-[var(--shadow-panel)] backdrop-blur sm:px-8 sm:py-8">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-            <div className="max-w-4xl">
-              <div className="inline-flex rounded-full bg-[var(--accent-soft)] px-3 py-1 text-sm font-semibold text-[var(--accent-strong)]">
-                Oursky planning workspace
+    <>
+      <header className="site-header">
+        <div className="wrap">
+          <div className="top">
+            <div className="brand">
+              <div>
+                <p className="eyebrow">Oursky checklist planner</p>
+                <h1>
+                  Calendar-first task control with daily execution built in.
+                </h1>
               </div>
-              <h1 className="font-display mt-4 text-4xl leading-none text-[var(--text-primary)] sm:text-5xl lg:text-6xl">
-                Clean task planning across projects, schedules, and the calendar.
-              </h1>
-              <p className="mt-4 max-w-3xl text-base text-[var(--text-muted)] sm:text-lg">
-                Capture work once, organize it by project and workflow stage, pick today&apos;s focus tasks,
-                and review the month without losing context.
-              </p>
+              <div className="brand-copy">
+                Day and week planning, checklist-heavy todos, and a focused Top
+                3 without leaving the timetable.
+              </div>
             </div>
 
-            <div className="flex w-full max-w-sm flex-col gap-4">
-              <div className="rounded-[28px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-subtle)]">
-                  Current workspace
-                </p>
-                <p className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">{viewSummary}</p>
-                <p className="mt-2 text-sm text-[var(--text-muted)]">
-                  {activeProject ? `Active project: ${activeProject.name}` : 'No project selected'}
-                </p>
-              </div>
-
+            <div className="header-pills">
+              <span className="pill">{openCount} open</span>
+              <span className="pill">{doneCount} done</span>
+              <span className="pill">{overdueCount} overdue</span>
               <button
                 type="button"
-                onClick={() => setTheme((currentTheme) => (currentTheme === 'light' ? 'dark' : 'light'))}
-                className="flex items-center justify-between rounded-[28px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] px-4 py-4 text-left hover:bg-[var(--bg-muted)]"
+                className="primary"
+                onClick={() => openNewModal()}
               >
-                <span>
-                  <span className="block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-subtle)]">
-                    Theme
-                  </span>
-                  <span className="mt-2 block text-base font-semibold text-[var(--text-primary)]">
-                    {theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
-                  </span>
-                </span>
-                <span className="rounded-full bg-[var(--bg-muted)] px-3 py-1 text-sm font-semibold text-[var(--text-secondary)]">
-                  {theme === 'light' ? 'Light' : 'Dark'}
-                </span>
+                New Todo
               </button>
             </div>
           </div>
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {headerStats.map((stat) => (
-              <div
-                key={stat.label}
-                className="rounded-[24px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] px-4 py-4"
-              >
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-subtle)]">
-                  {stat.label}
+          <form className="quick-add" onSubmit={handleQuickAdd}>
+            <input
+              value={quickAdd.title}
+              onChange={(event) =>
+                setQuickAdd((current) => ({
+                  ...current,
+                  title: event.target.value,
+                }))
+              }
+              placeholder="Quick add a todo for the calendar"
+              aria-label="Quick add title"
+            />
+            <input
+              type="date"
+              value={quickAdd.date}
+              onChange={(event) =>
+                setQuickAdd((current) => ({
+                  ...current,
+                  date: event.target.value,
+                }))
+              }
+              aria-label="Quick add due date"
+            />
+            <select
+              value={quickAdd.course}
+              onChange={(event) =>
+                setQuickAdd((current) => ({
+                  ...current,
+                  course: event.target.value,
+                }))
+              }
+              aria-label="Quick add category"
+            >
+              {courseOptions.map((course) => (
+                <option key={course} value={course}>
+                  {course}
+                </option>
+              ))}
+            </select>
+            <select
+              value={quickAdd.priority}
+              onChange={(event) =>
+                setQuickAdd((current) => ({
+                  ...current,
+                  priority: event.target.value as PriorityLevel,
+                }))
+              }
+              aria-label="Quick add priority"
+            >
+              {PRIORITY_LEVELS.map((priority) => (
+                <option key={priority} value={priority}>
+                  {priority}
+                </option>
+              ))}
+            </select>
+            <button type="submit" className="primary">
+              Add
+            </button>
+          </form>
+        </div>
+      </header>
+
+      <main className="wrap app-shell">
+        <aside className="sidebar">
+          <section className="panel">
+            <h2>
+              <span>Calendars</span>
+              <span className="pill">Filters</span>
+            </h2>
+            <div className="body">
+              <div className="nav-row">
+                <button
+                  type="button"
+                  onClick={() => setMiniMonthDate(addMonths(miniMonthDate, -1))}
+                >
+                  ◀
+                </button>
+                <span className="pill mono">
+                  {getMonthLabel(miniMonthDate)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setMiniMonthDate(addMonths(miniMonthDate, 1))}
+                >
+                  ▶
+                </button>
+              </div>
+
+              <div className="mini-calendar">
+                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
+                  (label) => (
+                    <div key={label} className="dow">
+                      {label}
+                    </div>
+                  ),
+                )}
+
+                {miniMonthDays.map((day) => {
+                  const dateKey = getTodayKey(day);
+                  const count = eventsByDate[dateKey]?.length ?? 0;
+                  const isCurrentMonth =
+                    day.getMonth() === miniMonthDate.getMonth();
+                  const isToday = dateKey === todayKey;
+                  const isSelected = dateKey === selectedDateKey;
+
+                  return (
+                    <button
+                      key={dateKey}
+                      type="button"
+                      className={`mini-day ${isCurrentMonth ? "" : "is-outside"} ${isToday ? "is-today" : ""} ${isSelected ? "is-selected" : ""}`}
+                      onClick={() => {
+                        setSelectedDateKey(dateKey);
+                        setCursorDate(fromDateKey(dateKey));
+                        setMiniMonthDate(
+                          new Date(day.getFullYear(), day.getMonth(), 1),
+                        );
+                        setQuickAdd((current) => ({
+                          ...current,
+                          date: dateKey,
+                        }));
+                      }}
+                    >
+                      <span>{day.getDate()}</span>
+                      {count > 0 ? <em>{count}</em> : null}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="sidebar-group">
+                <div className="sidebar-label">Show</div>
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={filters.showOpen}
+                    onChange={(event) =>
+                      setFilters((current) => ({
+                        ...current,
+                        showOpen: event.target.checked,
+                      }))
+                    }
+                  />
+                  <span>Open</span>
+                </label>
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={filters.showDone}
+                    onChange={(event) =>
+                      setFilters((current) => ({
+                        ...current,
+                        showDone: event.target.checked,
+                      }))
+                    }
+                  />
+                  <span>Done</span>
+                </label>
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={filters.showCancelled}
+                    onChange={(event) =>
+                      setFilters((current) => ({
+                        ...current,
+                        showCancelled: event.target.checked,
+                      }))
+                    }
+                  />
+                  <span>Cancelled</span>
+                </label>
+              </div>
+
+              <div className="sidebar-group">
+                <div className="sidebar-label">Categories</div>
+                {courseOptions.map((course) => {
+                  const categoryMeta = getCategoryMeta(course);
+                  const checked = !filters.hiddenCourses.includes(course);
+
+                  return (
+                    <label key={course} className="toggle-row">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) =>
+                          setFilters((current) => ({
+                            ...current,
+                            hiddenCourses: event.target.checked
+                              ? current.hiddenCourses.filter(
+                                  (value) => value !== course,
+                                )
+                              : [...current.hiddenCourses, course],
+                          }))
+                        }
+                      />
+                      <span
+                        className="pill"
+                        style={{
+                          borderColor: categoryMeta.border,
+                          background: categoryMeta.soft,
+                        }}
+                      >
+                        {course}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
+          <section className="panel">
+            <h2>
+              <span>Daily Top 3</span>
+              <span className="pill mono">{getShortDateLabel(todayKey)}</span>
+            </h2>
+            <div className="body list">
+              {top3Events.length === 0 ? (
+                <p className="empty">
+                  Pin up to three open todos here to keep the day tight.
                 </p>
-                <p className="mt-3 text-3xl font-semibold text-[var(--text-primary)]">{stat.value}</p>
+              ) : (
+                top3Events.map((event) => (
+                  <button
+                    key={event.id}
+                    type="button"
+                    className="top3-item"
+                    onClick={() => openEditModal(event)}
+                  >
+                    <span className="top3-item__title">{event.title}</span>
+                    <span className="top3-item__meta">
+                      <span>{event.priority}</span>
+                      <span>{event.course}</span>
+                      <span>{getRelativeDateLabel(event.date, todayKey)}</span>
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </section>
+
+          <section className="panel">
+            <h2>
+              <span>Selected Day</span>
+              <span className="pill mono">{selectedDateKey}</span>
+            </h2>
+            <div className="body">
+              <p className="detail-title">{selectedDateLabel}</p>
+              <p className="detail-copy">
+                {selectedDateEvents.length > 0
+                  ? `${selectedDateEvents.length} todo${selectedDateEvents.length === 1 ? "" : "s"} on deck.`
+                  : "No visible todos scheduled."}
+              </p>
+              <p className="detail-copy">
+                {todayEvents.length} open for today. {top3Events.length}/
+                {TOP3_LIMIT} pinned into focus.
+              </p>
+            </div>
+          </section>
+        </aside>
+
+        <section className="panel main-panel">
+          <h2>
+            <span>{view === "day" ? "Day" : "Week"}</span>
+            <span className="pill mono">{mainLabel}</span>
+          </h2>
+
+          <div className="body">
+            <div className="view-toolbar">
+              <div className="nav-row">
+                <button type="button" onClick={() => changeCursor(-1)}>
+                  Prev
+                </button>
+                <button type="button" onClick={jumpToToday}>
+                  Today
+                </button>
+                <button type="button" onClick={() => changeCursor(1)}>
+                  Next
+                </button>
               </div>
-            ))}
-          </div>
 
-          <div className="mt-6 flex flex-wrap gap-2">
-            <span className="rounded-full bg-[var(--bg-elevated-strong)] px-3 py-1.5 text-sm font-semibold text-[var(--text-secondary)]">
-              Filters affect project, schedule, and calendar views
-            </span>
-            <span className="rounded-full bg-[var(--bg-elevated-strong)] px-3 py-1.5 text-sm font-semibold text-[var(--text-secondary)]">
-              {overdueCount} overdue {overdueCount === 1 ? 'task' : 'tasks'}
-            </span>
-            <span className="rounded-full bg-[var(--bg-elevated-strong)] px-3 py-1.5 text-sm font-semibold text-[var(--text-secondary)]">
-              Calendar shows scheduled tasks by day
-            </span>
-          </div>
-        </header>
-
-        <div className="grid gap-6 xl:grid-cols-[320px,minmax(0,1fr),360px]">
-          <div className="self-start xl:sticky xl:top-6">
-            <ProjectSidebar
-              projects={projects}
-              sections={sections}
-              activeView={activeView}
-              activeProjectId={activeProjectId}
-              todayCount={todayTasks.length}
-              upcomingCount={upcomingTasks.length}
-              calendarCount={calendarCount}
-              projectTaskCounts={projectTaskCounts}
-              onSelectView={setActiveView}
-              onSelectProject={setActiveProject}
-              onToggleProject={toggleProjectCollapsed}
-              onAddProject={addProject}
-              onAddSection={addSection}
-            />
-          </div>
-
-          <div className="space-y-6">
-            <TaskComposer
-              key={activeProjectId}
-              projects={projects}
-              sections={sections}
-              activeProjectId={activeProjectId}
-              onAdd={addTask}
-            />
-
-            {!isLoaded ? (
-              <div className="rounded-[32px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated)] p-6 text-sm text-[var(--text-muted)] shadow-[var(--shadow-soft)]">
-                Loading your workspace...
+              <div className="nav-row">
+                <button
+                  type="button"
+                  className={view === "day" ? "primary" : ""}
+                  onClick={() => setView("day")}
+                >
+                  Day
+                </button>
+                <button
+                  type="button"
+                  className={view === "week" ? "primary" : ""}
+                  onClick={() => setView("week")}
+                >
+                  Week
+                </button>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => openNewModal()}
+                >
+                  Add Todo
+                </button>
               </div>
-            ) : activeView === 'today' ? (
-              <ScheduleBoard
-                title="Today's scheduled tasks"
-                subtitle="Everything due today is collected here so you can see commitments separately from the rest of the backlog."
-                groups={[{ title: 'Due today', dateKey: today, tasks: todayTasks }]}
-                projects={projects}
-                sections={sections}
-                labels={labels}
-                priorityIds={priorityIds}
-                onToggle={toggleTask}
-                onDelete={deleteTask}
-                onToggleTop3={toggleTop3}
-                onSelect={selectTask}
-              />
-            ) : activeView === 'upcoming' ? (
-              <ScheduleBoard
-                title="Next 7 days"
-                subtitle="Review the next week of work so upcoming commitments do not surprise you."
-                groups={
-                  upcomingGroups.length > 0
-                    ? upcomingGroups
-                    : [{ title: 'Next 7 days', tasks: [] }]
-                }
-                projects={projects}
-                sections={sections}
-                labels={labels}
-                priorityIds={priorityIds}
-                onToggle={toggleTask}
-                onDelete={deleteTask}
-                onToggleTop3={toggleTop3}
-                onSelect={selectTask}
-              />
-            ) : activeView === 'calendar' ? (
-              <CalendarBoard
-                month={calendarMonth}
-                selectedDateKey={selectedCalendarDateKey}
-                todayKey={today}
-                tasks={filteredTasks}
-                projects={projects}
-                sections={sections}
-                labels={labels}
-                priorityIds={priorityIds}
-                onSelectDate={handleSelectCalendarDate}
-                onChangeMonth={handleChangeMonth}
-                onJumpToToday={handleJumpToToday}
-                onToggle={toggleTask}
-                onDelete={deleteTask}
-                onToggleTop3={toggleTop3}
-                onSelectTask={selectTask}
-              />
+            </div>
+
+            {notice ? <div className="notice">{notice}</div> : null}
+
+            {view === "day" ? (
+              <div className="day-view">
+                <div className="day-header">
+                  <div>
+                    <p className="eyebrow">Day agenda</p>
+                    <h3>{selectedDateLabel}</h3>
+                  </div>
+                  <span className="pill">
+                    {selectedDateEvents.length} items
+                  </span>
+                </div>
+
+                <div className="task-stack">
+                  {selectedDateEvents.length === 0 ? (
+                    <p className="empty">
+                      No todos for this day with the current filters.
+                    </p>
+                  ) : (
+                    selectedDateEvents.map((event) => (
+                      <TodoCard
+                        key={event.id}
+                        event={event}
+                        todayKey={todayKey}
+                        isSelected={modal.eventId === event.id}
+                        onOpen={() => openEditModal(event)}
+                        onToggleTodo={() => handleToggleTodo(event.id)}
+                        onToggleChecklistItem={(itemId) =>
+                          handleToggleChecklistItem(event.id, itemId)
+                        }
+                        onToggleTop3={() => handleToggleTop3(event.id)}
+                      />
+                    ))
+                  )}
+                </div>
+              </div>
             ) : (
-              <ProjectBoard
-                project={activeProject}
-                sections={projectSections}
-                tasks={projectTasks}
-                labels={labels}
-                priorityIds={priorityIds}
-                onToggle={toggleTask}
-                onDelete={deleteTask}
-                onToggleTop3={toggleTop3}
-                onSelect={selectTask}
-              />
+              <div className="week-grid">
+                {weekDays.map((day) => {
+                  const dateKey = getTodayKey(day);
+                  const events = eventsByDate[dateKey] ?? [];
+
+                  return (
+                    <section
+                      key={dateKey}
+                      className={`week-cell ${dateKey === todayKey ? "is-today" : ""} ${dateKey === selectedDateKey ? "is-selected" : ""}`}
+                    >
+                      <button
+                        type="button"
+                        className="week-cell__header"
+                        onClick={() => {
+                          setSelectedDateKey(dateKey);
+                          setCursorDate(fromDateKey(dateKey));
+                          setQuickAdd((current) => ({
+                            ...current,
+                            date: dateKey,
+                          }));
+                        }}
+                      >
+                        <span className="mono">{dateKey}</span>
+                        <span>{getWeekdayLabel(dateKey)}</span>
+                      </button>
+
+                      <div className="task-stack">
+                        {events.length === 0 ? (
+                          <p className="empty">—</p>
+                        ) : (
+                          events.map((event) => (
+                            <TodoCard
+                              key={event.id}
+                              event={event}
+                              todayKey={todayKey}
+                              isSelected={modal.eventId === event.id}
+                              onOpen={() => openEditModal(event)}
+                              onToggleTodo={() => handleToggleTodo(event.id)}
+                              onToggleChecklistItem={(itemId) =>
+                                handleToggleChecklistItem(event.id, itemId)
+                              }
+                              onToggleTop3={() => handleToggleTop3(event.id)}
+                            />
+                          ))
+                        )}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
             )}
           </div>
+        </section>
+      </main>
 
-          <div className="space-y-6 self-start xl:sticky xl:top-6">
-            <Top3Section
-              todos={top3Todos}
-              suggestedTodos={suggestedP1Todos}
-              rolloverItems={rolloverItems}
-              limitMessage={limitMessage}
-              onToggle={toggleTask}
-              onDelete={deleteTask}
-              onToggleTop3={toggleTop3}
-              onRestore={restoreRollover}
-              onDismissRollover={dismissRollover}
-              onRestoreAll={restoreAllRollovers}
-            />
+      {modal.open ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={closeModal}
+        >
+          <div
+            className="modal panel"
+            role="dialog"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2>
+              <span>{modal.eventId ? "Edit Todo" : "New Todo"}</span>
+              <span className="pill">Checklist</span>
+            </h2>
 
-            <FilterPanel
-              projects={projects}
-              labels={labels}
-              filters={filters}
-              savedFilters={savedFilters}
-              activeSavedFilterId={activeSavedFilterId}
-              onSetFilters={setFilters}
-              onResetFilters={resetFilters}
-              onSaveCurrentFilter={saveCurrentFilter}
-              onApplySavedFilter={applySavedFilter}
-              onDeleteSavedFilter={deleteSavedFilter}
-              onAddLabel={addLabel}
-            />
+            <form className="body modal-form" onSubmit={handleSaveDraft}>
+              <label>
+                Title
+                <input
+                  value={draft.title}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      title: event.target.value,
+                    }))
+                  }
+                  placeholder="Outline the task"
+                />
+              </label>
 
-            <TaskInspector
-              task={selectedTask}
-              projects={projects}
-              sections={sections}
-              labels={labels}
-              onSelectTask={selectTask}
-              onUpdateTask={updateTask}
-            />
+              <div className="form-grid">
+                <label>
+                  Due date
+                  <input
+                    type="date"
+                    value={draft.date}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        date: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  Category
+                  <select
+                    value={draft.course}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        course: event.target.value,
+                      }))
+                    }
+                  >
+                    {courseOptions.map((course) => (
+                      <option key={course} value={course}>
+                        {course}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="form-grid">
+                <label>
+                  Priority
+                  <select
+                    value={draft.priority}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        priority: event.target.value as PriorityLevel,
+                      }))
+                    }
+                  >
+                    {PRIORITY_LEVELS.map((priority) => (
+                      <option key={priority} value={priority}>
+                        {priority}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Kind
+                  <select
+                    value={draft.kind}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        kind: event.target.value,
+                      }))
+                    }
+                  >
+                    {TODO_KINDS.map((kind) => (
+                      <option key={kind} value={kind}>
+                        {kind}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="form-grid">
+                <label>
+                  Start
+                  <input
+                    type="time"
+                    value={draft.start}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        start: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  End
+                  <input
+                    type="time"
+                    value={draft.end}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        end: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+
+              <div className="form-grid">
+                <label>
+                  Context
+                  <input
+                    value={draft.location}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        location: event.target.value,
+                      }))
+                    }
+                    placeholder="Desk, Figma, phone, commute"
+                  />
+                </label>
+                <label>
+                  Add to today&apos;s Top 3
+                  <button
+                    type="button"
+                    className={`toggle-pill ${draft.top3Date === todayKey ? "is-active" : ""}`}
+                    onClick={() =>
+                      setDraft((current) => ({
+                        ...current,
+                        top3Date:
+                          current.top3Date === todayKey ? null : todayKey,
+                      }))
+                    }
+                  >
+                    {draft.top3Date === todayKey ? "Pinned" : "Not pinned"}
+                  </button>
+                </label>
+              </div>
+
+              <div className="status-row">
+                {(["open", "done", "cancelled"] as const).map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    className={`pill pill--ghost ${draft.status === status ? "is-focus" : ""}`}
+                    onClick={() => handleDraftStatus(status)}
+                  >
+                    {status}
+                  </button>
+                ))}
+              </div>
+
+              <label>
+                Notes
+                <textarea
+                  value={draft.notes}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      notes: event.target.value,
+                    }))
+                  }
+                  placeholder="Supporting context, dependencies, or next action"
+                />
+              </label>
+
+              <div className="checklist-editor">
+                <div className="checklist-editor__header">
+                  <span>Checklist items</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft((current) => ({
+                        ...current,
+                        checklist: [
+                          ...current.checklist,
+                          {
+                            id:
+                              typeof crypto !== "undefined" &&
+                              "randomUUID" in crypto
+                                ? crypto.randomUUID()
+                                : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                            text: "",
+                            done: false,
+                          },
+                        ],
+                      }))
+                    }
+                  >
+                    Add item
+                  </button>
+                </div>
+
+                <div className="checklist-editor__list">
+                  {draft.checklist.length === 0 ? (
+                    <p className="empty">
+                      Break the todo into subtasks when needed.
+                    </p>
+                  ) : (
+                    draft.checklist.map((item) => (
+                      <div key={item.id} className="checklist-editor__item">
+                        <input
+                          type="checkbox"
+                          checked={item.done}
+                          onChange={() =>
+                            updateChecklistItem(item.id, (current) => ({
+                              ...current,
+                              done: !current.done,
+                            }))
+                          }
+                        />
+                        <input
+                          value={item.text}
+                          onChange={(event) =>
+                            updateChecklistItem(item.id, (current) => ({
+                              ...current,
+                              text: event.target.value,
+                            }))
+                          }
+                          placeholder="Describe a subtask"
+                        />
+                        <button
+                          type="button"
+                          className="danger"
+                          onClick={() =>
+                            setDraft((current) => ({
+                              ...current,
+                              checklist: current.checklist.filter(
+                                (entry) => entry.id !== item.id,
+                              ),
+                            }))
+                          }
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="modal-actions">
+                <div className="nav-row">
+                  <button type="submit" className="primary">
+                    Save
+                  </button>
+                  <button type="button" className="danger" onClick={closeModal}>
+                    Close
+                  </button>
+                </div>
+
+                {modal.eventId ? (
+                  <div className="nav-row">
+                    <button
+                      type="button"
+                      onClick={() => handleDraftStatus("done")}
+                    >
+                      Mark Done
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDraftStatus("cancelled")}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={handleDeleteDraft}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </form>
           </div>
         </div>
-      </div>
-    </main>
-  )
+      ) : null}
+    </>
+  );
 }
 
-export default App
+export default App;

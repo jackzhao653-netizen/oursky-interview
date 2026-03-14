@@ -1,0 +1,225 @@
+{
+  "version": 1,
+  "events": [
+    {
+      "id": "product-onboarding-pass",
+      "title": "Finalize onboarding checklist pass",
+      "course": "Product",
+      "kind": "build",
+      "date": "2026-03-14",
+      "start": "09:30",
+      "end": "11:00",
+      "location": "Workspace",
+      "notes": "Ship the revised starter flow with cleaner handoff notes.",
+      "status": "open",
+      "priority": "P1",
+      "checklist": [
+        {
+          "id": "product-onboarding-pass-1",
+          "text": "Review empty states",
+          "done": true
+        },
+        {
+          "id": "product-onboarding-pass-2",
+          "text": "Tighten copy for action buttons",
+          "done": false
+        },
+        {
+          "id": "product-onboarding-pass-3",
+          "text": "Record QA notes for dev handoff",
+          "done": false
+        }
+      ],
+      "top3Date": "2026-03-14",
+      "createdAt": "2026-03-13T18:00:00.000Z",
+      "updatedAt": "2026-03-13T18:00:00.000Z",
+      "completedAt": null,
+      "order": 1
+    },
+    {
+      "id": "client-demo-notes",
+      "title": "Prepare client demo notes",
+      "course": "Client",
+      "kind": "follow-up",
+      "date": "2026-03-14",
+      "start": "15:00",
+      "end": "16:00",
+      "location": "Zoom",
+      "notes": "Keep the walkthrough under 10 minutes and flag open decisions.",
+      "status": "open",
+      "priority": "P1",
+      "checklist": [
+        {
+          "id": "client-demo-notes-1",
+          "text": "Pull last sprint wins",
+          "done": true
+        },
+        {
+          "id": "client-demo-notes-2",
+          "text": "Draft decision log",
+          "done": false
+        }
+      ],
+      "top3Date": "2026-03-14",
+      "createdAt": "2026-03-13T18:10:00.000Z",
+      "updatedAt": "2026-03-13T18:10:00.000Z",
+      "completedAt": null,
+      "order": 2
+    },
+    {
+      "id": "studio-content-qc",
+      "title": "Content QA for launch page",
+      "course": "Studio",
+      "kind": "review",
+      "date": "2026-03-15",
+      "start": "",
+      "end": "",
+      "location": "Figma",
+      "notes": "Validate final headline, card spacing, and mobile crop points.",
+      "status": "open",
+      "priority": "P2",
+      "checklist": [
+        {
+          "id": "studio-content-qc-1",
+          "text": "Check hero spacing on mobile",
+          "done": false
+        },
+        {
+          "id": "studio-content-qc-2",
+          "text": "Confirm illustration export",
+          "done": false
+        },
+        {
+          "id": "studio-content-qc-3",
+          "text": "Approve CTA copy",
+          "done": false
+        }
+      ],
+      "top3Date": "2026-03-14",
+      "createdAt": "2026-03-13T18:20:00.000Z",
+      "updatedAt": "2026-03-13T18:20:00.000Z",
+      "completedAt": null,
+      "order": 3
+    },
+    {
+      "id": "client-recap-mail",
+      "title": "Send recap and next steps",
+      "course": "Client",
+      "kind": "follow-up",
+      "date": "2026-03-16",
+      "start": "10:00",
+      "end": "10:30",
+      "location": "Inbox",
+      "notes": "Include dependencies, owners, and revised delivery dates.",
+      "status": "open",
+      "priority": "P2",
+      "checklist": [
+        {
+          "id": "client-recap-mail-1",
+          "text": "List blockers with owners",
+          "done": false
+        },
+        {
+          "id": "client-recap-mail-2",
+          "text": "Attach current timeline",
+          "done": false
+        }
+      ],
+      "top3Date": null,
+      "createdAt": "2026-03-13T18:30:00.000Z",
+      "updatedAt": "2026-03-13T18:30:00.000Z",
+      "completedAt": null,
+      "order": 4
+    },
+    {
+      "id": "personal-errands-run",
+      "title": "Run weekend errands",
+      "course": "Personal",
+      "kind": "errand",
+      "date": "2026-03-17",
+      "start": "",
+      "end": "",
+      "location": "Town",
+      "notes": "Keep this grouped to one trip and finish before dinner.",
+      "status": "open",
+      "priority": "P3",
+      "checklist": [
+        {
+          "id": "personal-errands-run-1",
+          "text": "Pick up dry cleaning",
+          "done": false
+        },
+        {
+          "id": "personal-errands-run-2",
+          "text": "Restock coffee beans",
+          "done": false
+        },
+        {
+          "id": "personal-errands-run-3",
+          "text": "Drop parcel at courier",
+          "done": false
+        }
+      ],
+      "top3Date": null,
+      "createdAt": "2026-03-13T18:40:00.000Z",
+      "updatedAt": "2026-03-13T18:40:00.000Z",
+      "completedAt": null,
+      "order": 5
+    },
+    {
+      "id": "studio-retro-board",
+      "title": "Archive last experiment board",
+      "course": "Studio",
+      "kind": "planning",
+      "date": "2026-03-13",
+      "start": "17:00",
+      "end": "17:20",
+      "location": "Notion",
+      "notes": "Cancelled after scope changed.",
+      "status": "cancelled",
+      "priority": "P4",
+      "checklist": [
+        {
+          "id": "studio-retro-board-1",
+          "text": "Export decisions",
+          "done": false
+        }
+      ],
+      "top3Date": null,
+      "createdAt": "2026-03-12T17:00:00.000Z",
+      "updatedAt": "2026-03-12T17:00:00.000Z",
+      "completedAt": null,
+      "order": 6
+    },
+    {
+      "id": "product-copy-lock",
+      "title": "Lock release note copy",
+      "course": "Product",
+      "kind": "review",
+      "date": "2026-03-18",
+      "start": "13:30",
+      "end": "14:00",
+      "location": "Docs",
+      "notes": "Completed after editorial review.",
+      "status": "done",
+      "priority": "P2",
+      "checklist": [
+        {
+          "id": "product-copy-lock-1",
+          "text": "Review legal wording",
+          "done": true
+        },
+        {
+          "id": "product-copy-lock-2",
+          "text": "Approve final changelog",
+          "done": true
+        }
+      ],
+      "top3Date": null,
+      "createdAt": "2026-03-12T15:00:00.000Z",
+      "updatedAt": "2026-03-13T09:00:00.000Z",
+      "completedAt": "2026-03-13T09:00:00.000Z",
+      "order": 7
+    }
+  ]
+}
