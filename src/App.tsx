@@ -14,6 +14,7 @@ import {
   PRIORITY_LEVELS,
   RECURRENCE_OPTIONS,
   TOP3_LIMIT,
+  type CalendarView,
   type ChecklistItem,
   type PriorityLevel,
   type ResolvedTodoEvent,
@@ -49,6 +50,13 @@ import {
 } from "./utils/storage";
 
 type ThemeMode = "dark" | "light";
+type SettingsDateFormat = "long" | "compact";
+
+type AppSettings = {
+  defaultView: CalendarView;
+  showCompletedTasks: boolean;
+  dateFormat: SettingsDateFormat;
+};
 
 type ModalState = {
   open: boolean;
@@ -97,6 +105,12 @@ const DEFAULT_FILTERS: TodoFilters = {
 };
 
 const THEME_STORAGE_KEY = "oursky-todo-theme";
+const SETTINGS_STORAGE_KEY = "oursky-todo-settings";
+const DEFAULT_SETTINGS: AppSettings = {
+  defaultView: "week",
+  showCompletedTasks: false,
+  dateFormat: "long",
+};
 const MOBILE_TOOLTIP_BREAKPOINT = 720;
 const TOOLTIP_EDGE_PADDING = 16;
 const TOOLTIP_GAP = 12;
@@ -282,6 +296,108 @@ function loadStoredTheme(): ThemeMode {
   return window.localStorage.getItem(THEME_STORAGE_KEY) === "light"
     ? "light"
     : "dark";
+}
+
+function loadStoredSettings(): AppSettings {
+  if (typeof window === "undefined") {
+    return DEFAULT_SETTINGS;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (!raw) {
+      return DEFAULT_SETTINGS;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<AppSettings>;
+
+    return {
+      defaultView: parsed.defaultView === "day" ? "day" : DEFAULT_SETTINGS.defaultView,
+      showCompletedTasks:
+        typeof parsed.showCompletedTasks === "boolean"
+          ? parsed.showCompletedTasks
+          : DEFAULT_SETTINGS.showCompletedTasks,
+      dateFormat: parsed.dateFormat === "compact" ? "compact" : DEFAULT_SETTINGS.dateFormat,
+    };
+  } catch (error) {
+    console.error("Failed to parse stored settings", error);
+    return DEFAULT_SETTINGS;
+  }
+}
+
+function getCalculatedRecurrenceEndDate(
+  dateKey: string,
+  recurrence: TodoEvent["recurrence"],
+  recurrenceCount: number | null,
+) {
+  if (recurrence === "once" || recurrenceCount === null || recurrenceCount < 1) {
+    return null;
+  }
+
+  if (recurrence === "weekly") {
+    return getTodayKey(addDays(fromDateKey(dateKey), (recurrenceCount - 1) * 7));
+  }
+
+  return getTodayKey(addMonths(fromDateKey(dateKey), recurrenceCount - 1));
+}
+
+function getCalculatedRecurrenceCount(
+  dateKey: string,
+  recurrence: TodoEvent["recurrence"],
+  recurrenceEndDate: string | null,
+) {
+  if (recurrence === "once" || !recurrenceEndDate) {
+    return null;
+  }
+
+  if (compareDateKeys(recurrenceEndDate, dateKey) < 0) {
+    return 0;
+  }
+
+  if (recurrence === "weekly") {
+    const diffMs = fromDateKey(recurrenceEndDate).getTime() - fromDateKey(dateKey).getTime();
+    const diffDays = Math.floor(diffMs / 86400000);
+    return Math.floor(diffDays / 7) + 1;
+  }
+
+  const anchor = fromDateKey(dateKey);
+  const end = fromDateKey(recurrenceEndDate);
+  const monthDiff =
+    (end.getFullYear() - anchor.getFullYear()) * 12 +
+    (end.getMonth() - anchor.getMonth());
+
+  return monthDiff + 1;
+}
+
+function normalizeRecurrenceDraft(event: TodoEvent): TodoEvent {
+  if (event.recurrence === "once") {
+    return {
+      ...event,
+      recurrenceCount: null,
+      recurrenceEndDate: null,
+    };
+  }
+
+  if (event.recurrenceCount !== null) {
+    const safeCount = Math.max(1, event.recurrenceCount);
+    return {
+      ...event,
+      recurrenceCount: safeCount,
+      recurrenceEndDate: getCalculatedRecurrenceEndDate(event.date, event.recurrence, safeCount),
+    };
+  }
+
+  if (event.recurrenceEndDate !== null) {
+    const count = getCalculatedRecurrenceCount(event.date, event.recurrence, event.recurrenceEndDate);
+    const safeCount = count === null ? 1 : Math.max(1, count);
+    return {
+      ...event,
+      recurrenceCount: safeCount,
+      recurrenceEndDate: getCalculatedRecurrenceEndDate(event.date, event.recurrence, safeCount),
+    };
+  }
+
+  return event;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -636,13 +752,17 @@ function App() {
   const [file, setFile] = useState<TodoEventFile>({ version: 1, events: [] });
   const [isReady, setIsReady] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(() => loadStoredTheme());
-  const [view, setView] = useState<"day" | "week">("week");
+  const [settings, setSettings] = useState<AppSettings>(() => loadStoredSettings());
+  const [view, setView] = useState<CalendarView>(() => loadStoredSettings().defaultView);
   const [cursorDate, setCursorDate] = useState(() => fromDateKey(todayKey));
   const [selectedDateKey, setSelectedDateKey] = useState(todayKey);
   const [miniMonthDate, setMiniMonthDate] = useState(
     () => new Date(fromDateKey(todayKey)),
   );
-  const [filters, setFilters] = useState<TodoFilters>(DEFAULT_FILTERS);
+  const [filters, setFilters] = useState<TodoFilters>(() => ({
+    ...DEFAULT_FILTERS,
+    showDone: loadStoredSettings().showCompletedTasks,
+  }));
   const [modal, setModal] = useState<ModalState>({
     open: false,
     eventId: null,
@@ -726,6 +846,10 @@ function App() {
     document.documentElement.style.colorScheme = theme;
     window.localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
+
+  useEffect(() => {
+    window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  }, [settings]);
 
   useEffect(() => {
     if (!isDatePickerOpen) {
@@ -871,7 +995,9 @@ function App() {
     })
     .sort((left, right) => compareDateKeys(left.date, right.date))
     .filter((event) => event.title.trim().length > 0);
-  const selectedDateLabel = getFullDateLabel(selectedDateKey);
+  const selectedDateLabel = settings.dateFormat === "compact"
+    ? getShortDateLabel(selectedDateKey)
+    : getFullDateLabel(selectedDateKey);
   const mainLabel = view === "day" ? selectedDateKey : getWeekLabel(cursorDate);
   const eventsByDate = visibleEvents.reduce<Record<string, ResolvedTodoEvent[]>>(
     (grouped, event) => {
@@ -908,15 +1034,15 @@ function App() {
   }
 
   function openNewModal(dateKey = selectedDateKey) {
-    setDraft(createEmptyTodoEvent(dateKey));
+    setDraft(normalizeRecurrenceDraft(createEmptyTodoEvent(dateKey)));
     setModal({ open: true, eventId: null });
   }
 
   function openEditModal(event: TodoEvent) {
-    setDraft({
+    setDraft(normalizeRecurrenceDraft({
       ...event,
       checklist: event.checklist.map((item) => ({ ...item })),
-    });
+    }));
     setModal({ open: true, eventId: event.id });
   }
 
@@ -975,7 +1101,7 @@ function App() {
     }
 
     const nextEvent: TodoEvent = {
-      ...draft,
+      ...normalizeRecurrenceDraft(draft),
       title,
       checklist: cleanedChecklist,
       updatedAt: new Date().toISOString(),
@@ -1820,10 +1946,12 @@ function App() {
                       type="date"
                       value={draft.date}
                       onChange={(event) =>
-                        setDraft((current) => ({
-                          ...current,
-                          date: event.target.value,
-                        }))
+                        setDraft((current) =>
+                          normalizeRecurrenceDraft({
+                            ...current,
+                            date: event.target.value,
+                          }),
+                        )
                       }
                     />
                   </label>
@@ -1901,10 +2029,21 @@ function App() {
                     <select
                       value={draft.recurrence}
                       onChange={(event) =>
-                        setDraft((current) => ({
-                          ...current,
-                          recurrence: event.target.value as TodoEvent["recurrence"],
-                        }))
+                        setDraft((current) => {
+                          const nextRecurrence = event.target.value as TodoEvent["recurrence"];
+                          return normalizeRecurrenceDraft({
+                            ...current,
+                            recurrence: nextRecurrence,
+                            recurrenceCount:
+                              nextRecurrence === "once"
+                                ? null
+                                : current.recurrenceCount ?? 1,
+                            recurrenceEndDate:
+                              nextRecurrence === "once"
+                                ? null
+                                : current.recurrenceEndDate,
+                          });
+                        })
                       }
                     >
                       {RECURRENCE_OPTIONS.map((recurrence) => (
@@ -1941,11 +2080,13 @@ function App() {
                           name="recurrence-mode"
                           checked={draft.recurrenceCount !== null}
                           onChange={() =>
-                            setDraft((current) => ({
-                              ...current,
-                              recurrenceCount: 5,
-                              recurrenceEndDate: null,
-                            }))
+                            setDraft((current) =>
+                              normalizeRecurrenceDraft({
+                                ...current,
+                                recurrenceCount: 5,
+                                recurrenceEndDate: null,
+                              }),
+                            )
                           }
                         />
                         <span>Repeat</span>
@@ -1956,12 +2097,14 @@ function App() {
                           value={draft.recurrenceCount ?? 5}
                           disabled={draft.recurrenceCount === null}
                           onChange={(event) => {
-                            const count = parseInt(event.target.value) || 1;
-                            setDraft((current) => ({
-                              ...current,
-                              recurrenceCount: count,
-                              recurrenceEndDate: null,
-                            }));
+                            const count = Math.max(1, parseInt(event.target.value, 10) || 1);
+                            setDraft((current) =>
+                              normalizeRecurrenceDraft({
+                                ...current,
+                                recurrenceCount: count,
+                                recurrenceEndDate: null,
+                              }),
+                            );
                           }}
                           className="recurrence-input"
                         />
@@ -1973,11 +2116,13 @@ function App() {
                           name="recurrence-mode"
                           checked={draft.recurrenceEndDate !== null}
                           onChange={() =>
-                            setDraft((current) => ({
-                              ...current,
-                              recurrenceCount: null,
-                              recurrenceEndDate: getTodayKey(addDays(fromDateKey(current.date), 30)),
-                            }))
+                            setDraft((current) =>
+                              normalizeRecurrenceDraft({
+                                ...current,
+                                recurrenceCount: null,
+                                recurrenceEndDate: getTodayKey(addDays(fromDateKey(current.date), 30)),
+                              }),
+                            )
                           }
                         />
                         <span>Repeat until</span>
@@ -1986,11 +2131,13 @@ function App() {
                           value={draft.recurrenceEndDate ?? ""}
                           disabled={draft.recurrenceEndDate === null}
                           onChange={(event) =>
-                            setDraft((current) => ({
-                              ...current,
-                              recurrenceCount: null,
-                              recurrenceEndDate: event.target.value,
-                            }))
+                            setDraft((current) =>
+                              normalizeRecurrenceDraft({
+                                ...current,
+                                recurrenceCount: null,
+                                recurrenceEndDate: event.target.value,
+                              }),
+                            )
                           }
                           className="recurrence-input"
                         />
@@ -2257,16 +2404,78 @@ function App() {
             onClick={(event) => event.stopPropagation()}
           >
             <h2>Settings</h2>
-            <div className="body">
-              <p style={{ padding: "2rem", textAlign: "center", color: "var(--text-secondary)" }}>
-                Category and Activity customization coming soon.
-                <br />
-                <br />
-                Current options:
-                <br />
-                <strong>Categories:</strong> {CATEGORY_OPTIONS.join(", ")}
-                <br />
-                <strong>Activities:</strong> {ACTIVITY_OPTIONS.join(", ")}
+            <div className="body modal-form__scroll">
+              <div className="field-group">
+                <span>Default view</span>
+                <div className="status-row">
+                  {(["day", "week"] as const).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      className={`pill pill--ghost ${settings.defaultView === option ? "is-focus" : ""}`}
+                      onClick={() => {
+                        setSettings((current) => ({ ...current, defaultView: option }));
+                        setView(option);
+                      }}
+                    >
+                      {option === "day" ? "Day view" : "Week view"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="field-group">
+                <span>Theme</span>
+                <div className="status-row">
+                  {(["dark", "light"] as const).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      className={`pill pill--ghost ${theme === option ? "is-focus" : ""}`}
+                      onClick={() => setTheme(option)}
+                    >
+                      {option === "dark" ? "Dark" : "Light"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="field-group">
+                <span>Completed tasks</span>
+                <button
+                  type="button"
+                  className={`toggle-pill ${settings.showCompletedTasks ? "is-active" : ""}`}
+                  onClick={() => {
+                    const nextValue = !settings.showCompletedTasks;
+                    setSettings((current) => ({ ...current, showCompletedTasks: nextValue }));
+                    setFilters((current) => ({ ...current, showDone: nextValue }));
+                  }}
+                >
+                  {settings.showCompletedTasks ? "Visible in lists" : "Hidden in lists"}
+                </button>
+              </div>
+
+              <div className="field-group">
+                <span>Date display</span>
+                <div className="status-row">
+                  {(["long", "compact"] as const).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      className={`pill pill--ghost ${settings.dateFormat === option ? "is-focus" : ""}`}
+                      onClick={() => setSettings((current) => ({ ...current, dateFormat: option }))}
+                    >
+                      {option === "long" ? "Long" : "Compact"}
+                    </button>
+                  ))}
+                </div>
+                <p className="empty">
+                  Preview: {settings.dateFormat === "compact" ? getShortDateLabel(selectedDateKey) : getFullDateLabel(selectedDateKey)}
+                </p>
+              </div>
+
+              <p className="empty">
+                Categories: {CATEGORY_OPTIONS.join(", ")} · Activities: {ACTIVITY_OPTIONS.join(", ")}
               </p>
             </div>
             <div className="modal-actions">
