@@ -385,7 +385,7 @@ function WeekTodoButton({ event, onSelect }: WeekTodoButtonProps) {
       title={event.title}
     >
       <span className="week-task__line">
-        <PriorityBadge priority={event.priority} compact />
+        <PriorityBadge priority={event.priority} dotOnly />
         <span className="week-task__title">{event.title}</span>
       </span>
     </button>
@@ -1178,7 +1178,7 @@ function App() {
                               onClick={() => selectDate(dateKey, "day")}
                             >
                               <div className="week-cell__header-copy">
-                                <span className="mono">{dateKey}</span>
+                                <span className="mono">{dateKey.slice(5)}</span>
                                 <strong>{getWeekdayLabel(dateKey)}</strong>
                               </div>
                               <span className="pill">
