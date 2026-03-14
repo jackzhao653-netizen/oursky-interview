@@ -189,6 +189,8 @@ export function getOccurrenceDatesInRange(
   recurrence: TodoRecurrence,
   rangeStart: string,
   rangeEnd: string,
+  recurrenceCount: number | null = null,
+  recurrenceEndDate: string | null = null,
 ) {
   if (compareDateKeys(rangeStart, rangeEnd) > 0) {
     return [];
@@ -199,6 +201,11 @@ export function getOccurrenceDatesInRange(
     return [];
   }
 
+  // Apply recurrence end date limit
+  const effectiveEnd = recurrenceEndDate && compareDateKeys(recurrenceEndDate, rangeEnd) < 0
+    ? recurrenceEndDate
+    : rangeEnd;
+
   if (recurrence === "once") {
     return [first];
   }
@@ -208,10 +215,15 @@ export function getOccurrenceDatesInRange(
 
     for (
       let cursor = fromDateKey(first);
-      compareDateKeys(getTodayKey(cursor), rangeEnd) <= 0;
+      compareDateKeys(getTodayKey(cursor), effectiveEnd) <= 0;
       cursor = addDays(cursor, 7)
     ) {
       occurrences.push(getTodayKey(cursor));
+      
+      // Apply recurrence count limit
+      if (recurrenceCount !== null && occurrences.length >= recurrenceCount) {
+        break;
+      }
     }
 
     return occurrences;
@@ -224,11 +236,17 @@ export function getOccurrenceDatesInRange(
   for (;;) {
     const occurrence = getMonthlyOccurrenceDate(dateKey, monthOffset);
 
-    if (compareDateKeys(occurrence, rangeEnd) > 0) {
+    if (compareDateKeys(occurrence, effectiveEnd) > 0) {
       return occurrences;
     }
 
     occurrences.push(occurrence);
+    
+    // Apply recurrence count limit
+    if (recurrenceCount !== null && occurrences.length >= recurrenceCount) {
+      return occurrences;
+    }
+    
     monthOffset += 1;
   }
 }

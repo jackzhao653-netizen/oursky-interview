@@ -185,6 +185,9 @@ export function createEmptyTodoEvent(date = getTodayKey()): TodoEvent {
     category: DEFAULT_CATEGORY,
     activity: DEFAULT_ACTIVITY,
     recurrence: DEFAULT_RECURRENCE,
+    recurrenceCount: null,
+    recurrenceEndDate: null,
+    completedOccurrences: [],
     date,
     start: "",
     end: "",
@@ -259,15 +262,24 @@ export function resolveEventsInRange(
       event.recurrence,
       rangeStart,
       rangeEnd,
-    ).map((occurrenceDate) => ({
-      ...event,
-      date: occurrenceDate,
-      sourceEventId: event.id,
-      occurrenceId:
-        event.recurrence === "once" && occurrenceDate === event.date
-          ? event.id
-          : `${event.id}::${occurrenceDate}`,
-    })),
+      event.recurrenceCount,
+      event.recurrenceEndDate,
+    ).map((occurrenceDate) => {
+      // Check if this occurrence was completed
+      const isCompleted = event.completedOccurrences.includes(occurrenceDate);
+      
+      return {
+        ...event,
+        date: occurrenceDate,
+        status: isCompleted ? "done" : event.status,
+        completedAt: isCompleted ? new Date().toISOString() : event.completedAt,
+        sourceEventId: event.id,
+        occurrenceId:
+          event.recurrence === "once" && occurrenceDate === event.date
+            ? event.id
+            : `${event.id}::${occurrenceDate}`,
+      };
+    }),
   );
 
   return sortEvents(resolvedEvents);

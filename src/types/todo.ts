@@ -35,6 +35,9 @@ export type TodoEvent = {
   category: string;
   activity: string;
   recurrence: TodoRecurrence;
+  recurrenceCount: number | null; // null = forever
+  recurrenceEndDate: string | null; // YYYY-MM-DD format
+  completedOccurrences: string[]; // Array of YYYY-MM-DD dates that were completed
   date: string;
   start: string;
   end: string;
