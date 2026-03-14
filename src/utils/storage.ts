@@ -306,6 +306,9 @@ let flushQueue = Promise.resolve();
 let syncListenerAttached = false;
 
 function emitPersistenceNotice(message: string) {
+  // Disabled: notifications removed per user request
+  return;
+  
   if (typeof window === "undefined") {
     return;
   }

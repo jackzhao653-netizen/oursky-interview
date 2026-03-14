@@ -1263,7 +1263,7 @@ label {
 
 .modal {
   width: min(760px, calc(100vw - 24px));
-  max-height: min(860px, calc(100vh - 24px));
+  max-height: min(90vh, calc(100vh - 48px));
   background: var(--panel-strong);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
