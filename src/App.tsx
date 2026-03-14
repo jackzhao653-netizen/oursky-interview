@@ -871,18 +871,6 @@ function App() {
     })
     .sort((left, right) => compareDateKeys(left.date, right.date))
     .filter((event) => event.title.trim().length > 0);
-  const openCount = file.events.filter(
-    (event) => event.status === "open",
-  ).length;
-  const doneCount = file.events.filter(
-    (event) => event.status === "done",
-  ).length;
-  const overdueCount = file.events.filter(
-    (event) =>
-      event.status === "open" &&
-      event.recurrence === "once" &&
-      compareDateKeys(event.date, todayKey) < 0,
-  ).length;
   const selectedDateLabel = getFullDateLabel(selectedDateKey);
   const mainLabel = view === "day" ? selectedDateKey : getWeekLabel(cursorDate);
   const eventsByDate = visibleEvents.reduce<Record<string, ResolvedTodoEvent[]>>(
@@ -1928,6 +1916,86 @@ function App() {
                   </label>
                 </div>
 
+                {(draft.recurrence === "weekly" || draft.recurrence === "monthly") && (
+                  <div className="field-group">
+                    <span>Recurrence Options</span>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <input
+                          type="radio"
+                          checked={draft.recurrenceCount === null && draft.recurrenceEndDate === null}
+                          onChange={() =>
+                            setDraft((current) => ({
+                              ...current,
+                              recurrenceCount: null,
+                              recurrenceEndDate: null,
+                            }))
+                          }
+                        />
+                        Repeat forever
+                      </label>
+                      <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <input
+                          type="radio"
+                          checked={draft.recurrenceCount !== null}
+                          onChange={() =>
+                            setDraft((current) => ({
+                              ...current,
+                              recurrenceCount: 5,
+                              recurrenceEndDate: null,
+                            }))
+                          }
+                        />
+                        Repeat
+                        <input
+                          type="number"
+                          min="1"
+                          max="100"
+                          value={draft.recurrenceCount ?? 5}
+                          disabled={draft.recurrenceCount === null}
+                          onChange={(event) => {
+                            const count = parseInt(event.target.value) || 1;
+                            setDraft((current) => ({
+                              ...current,
+                              recurrenceCount: count,
+                              recurrenceEndDate: null,
+                            }));
+                          }}
+                          style={{ width: "4rem", padding: "0.25rem 0.5rem" }}
+                        />
+                        times
+                      </label>
+                      <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <input
+                          type="radio"
+                          checked={draft.recurrenceEndDate !== null}
+                          onChange={() =>
+                            setDraft((current) => ({
+                              ...current,
+                              recurrenceCount: null,
+                              recurrenceEndDate: getTodayKey(addDays(fromDateKey(current.date), 30)),
+                            }))
+                          }
+                        />
+                        Repeat until
+                        <input
+                          type="date"
+                          value={draft.recurrenceEndDate ?? ""}
+                          disabled={draft.recurrenceEndDate === null}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              recurrenceCount: null,
+                              recurrenceEndDate: event.target.value,
+                            }))
+                          }
+                          style={{ padding: "0.25rem 0.5rem" }}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
+
                 <div className="field-group">
                   <span>Priority</span>
                   <div
@@ -2170,6 +2238,44 @@ function App() {
               </div>
             </dl>
           </article>
+        </div>
+      ) : null}
+
+      {isSettingsOpen ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setIsSettingsOpen(false)}
+        >
+          <div
+            className="modal panel"
+            role="dialog"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2>Settings</h2>
+            <div className="body">
+              <p style={{ padding: "2rem", textAlign: "center", color: "var(--text-secondary)" }}>
+                Category and Activity customization coming soon.
+                <br />
+                <br />
+                Current options:
+                <br />
+                <strong>Categories:</strong> {CATEGORY_OPTIONS.join(", ")}
+                <br />
+                <strong>Activities:</strong> {ACTIVITY_OPTIONS.join(", ")}
+              </p>
+            </div>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="primary"
+                onClick={() => setIsSettingsOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
     </>
