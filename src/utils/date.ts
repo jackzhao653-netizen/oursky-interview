@@ -1,3 +1,5 @@
+import type { TodoRecurrence } from "../types/todo";
+
 const shortDateFormatter = new Intl.DateTimeFormat(undefined, {
   weekday: "short",
   month: "short",
@@ -38,6 +40,34 @@ export function addDays(date: Date, amount: number) {
 
 export function addMonths(date: Date, amount: number) {
   return new Date(date.getFullYear(), date.getMonth() + amount, 1);
+}
+
+function getDaysInMonth(year: number, monthIndex: number) {
+  return new Date(year, monthIndex + 1, 0).getDate();
+}
+
+function getMonthOffset(anchor: Date, target: Date) {
+  return (
+    (target.getFullYear() - anchor.getFullYear()) * 12 +
+    (target.getMonth() - anchor.getMonth())
+  );
+}
+
+export function getMonthlyOccurrenceDate(dateKey: string, monthOffset: number) {
+  const anchor = fromDateKey(dateKey);
+  const targetMonth = new Date(
+    anchor.getFullYear(),
+    anchor.getMonth() + monthOffset,
+    1,
+  );
+  const day = Math.min(
+    anchor.getDate(),
+    getDaysInMonth(targetMonth.getFullYear(), targetMonth.getMonth()),
+  );
+
+  return getTodayKey(
+    new Date(targetMonth.getFullYear(), targetMonth.getMonth(), day),
+  );
 }
 
 export function startOfWeek(date: Date) {
@@ -82,6 +112,14 @@ export function compareDateKeys(left: string, right: string) {
   return left.localeCompare(right);
 }
 
+export function minDateKey(...dateKeys: string[]) {
+  return [...dateKeys].sort(compareDateKeys)[0];
+}
+
+export function maxDateKey(...dateKeys: string[]) {
+  return [...dateKeys].sort(compareDateKeys).at(-1) ?? dateKeys[0];
+}
+
 export function getDateDistance(dateKey: string, todayKey: string) {
   const deltaMs =
     fromDateKey(dateKey).getTime() - fromDateKey(todayKey).getTime();
@@ -108,4 +146,89 @@ export function getRelativeDateLabel(dateKey: string, todayKey: string) {
   }
 
   return getShortDateLabel(dateKey);
+}
+
+export function getNextOccurrenceOnOrAfter(
+  dateKey: string,
+  recurrence: TodoRecurrence,
+  fromDateKeyValue: string,
+) {
+  if (compareDateKeys(dateKey, fromDateKeyValue) >= 0) {
+    return dateKey;
+  }
+
+  if (recurrence === "once") {
+    return null;
+  }
+
+  if (recurrence === "weekly") {
+    const anchor = fromDateKey(dateKey);
+    const from = fromDateKey(fromDateKeyValue);
+    const deltaDays = Math.floor(
+      (from.getTime() - anchor.getTime()) / 86400000,
+    );
+    const weeksToAdd = Math.max(Math.ceil(deltaDays / 7), 0);
+    return getTodayKey(addDays(anchor, weeksToAdd * 7));
+  }
+
+  const anchor = fromDateKey(dateKey);
+  const from = fromDateKey(fromDateKeyValue);
+  let monthOffset = Math.max(getMonthOffset(anchor, from), 0);
+  let candidate = getMonthlyOccurrenceDate(dateKey, monthOffset);
+
+  if (compareDateKeys(candidate, fromDateKeyValue) < 0) {
+    monthOffset += 1;
+    candidate = getMonthlyOccurrenceDate(dateKey, monthOffset);
+  }
+
+  return candidate;
+}
+
+export function getOccurrenceDatesInRange(
+  dateKey: string,
+  recurrence: TodoRecurrence,
+  rangeStart: string,
+  rangeEnd: string,
+) {
+  if (compareDateKeys(rangeStart, rangeEnd) > 0) {
+    return [];
+  }
+
+  const first = getNextOccurrenceOnOrAfter(dateKey, recurrence, rangeStart);
+  if (!first || compareDateKeys(first, rangeEnd) > 0) {
+    return [];
+  }
+
+  if (recurrence === "once") {
+    return [first];
+  }
+
+  if (recurrence === "weekly") {
+    const occurrences: string[] = [];
+
+    for (
+      let cursor = fromDateKey(first);
+      compareDateKeys(getTodayKey(cursor), rangeEnd) <= 0;
+      cursor = addDays(cursor, 7)
+    ) {
+      occurrences.push(getTodayKey(cursor));
+    }
+
+    return occurrences;
+  }
+
+  const occurrences: string[] = [];
+  const anchor = fromDateKey(dateKey);
+  let monthOffset = getMonthOffset(anchor, fromDateKey(first));
+
+  for (;;) {
+    const occurrence = getMonthlyOccurrenceDate(dateKey, monthOffset);
+
+    if (compareDateKeys(occurrence, rangeEnd) > 0) {
+      return occurrences;
+    }
+
+    occurrences.push(occurrence);
+    monthOffset += 1;
+  }
 }

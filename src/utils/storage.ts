@@ -1,11 +1,13 @@
 import type {
   ChecklistItem,
   PriorityLevel,
+  ResolvedTodoEvent,
   TodoEvent,
   TodoEventFile,
+  TodoRecurrence,
   TodoStatus,
 } from "../types/todo";
-import { getTodayKey } from "./date";
+import { getOccurrenceDatesInRange, getTodayKey } from "./date";
 
 export const STORAGE_KEY = "oursky-study-timetable-checklists";
 
@@ -16,7 +18,8 @@ const EMPTY_FILE: TodoEventFile = {
 
 const DEFAULT_CATEGORY = "Product";
 
-const DEFAULT_KIND = "planning";
+const DEFAULT_ACTIVITY = "planning";
+const DEFAULT_RECURRENCE: TodoRecurrence = "once";
 
 function createId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -40,6 +43,18 @@ function isPriorityLevel(value: string): value is PriorityLevel {
     value === "green" ||
     value === "white"
   );
+}
+
+function isTodoRecurrence(value: string): value is TodoRecurrence {
+  return value === "once" || value === "weekly" || value === "monthly";
+}
+
+function normalizeRecurrence(value: unknown): TodoRecurrence {
+  if (typeof value !== "string" || !isTodoRecurrence(value)) {
+    return DEFAULT_RECURRENCE;
+  }
+
+  return value;
 }
 
 function normalizePriority(value: unknown): PriorityLevel {
@@ -79,7 +94,12 @@ function normalizeChecklistItem(item: unknown, index: number): ChecklistItem {
 function normalizeEvent(event: unknown, index: number): TodoEvent {
   const now = new Date().toISOString();
   const raw =
-    event && typeof event === "object" ? (event as Partial<TodoEvent>) : {};
+    event && typeof event === "object"
+      ? ((event as Partial<TodoEvent>) as Partial<TodoEvent> & {
+          course?: unknown;
+          kind?: unknown;
+        })
+      : {};
   const date =
     typeof raw.date === "string" && raw.date.length > 0
       ? raw.date
@@ -95,14 +115,19 @@ function normalizeEvent(event: unknown, index: number): TodoEvent {
       typeof raw.title === "string" && raw.title.length > 0
         ? raw.title
         : "Untitled todo",
-    course:
-      typeof raw.course === "string" && raw.course.length > 0
-        ? raw.course
+    category:
+      typeof raw.category === "string" && raw.category.length > 0
+        ? raw.category
+        : typeof raw.course === "string" && raw.course.length > 0
+          ? raw.course
         : DEFAULT_CATEGORY,
-    kind:
-      typeof raw.kind === "string" && raw.kind.length > 0
-        ? raw.kind
-        : DEFAULT_KIND,
+    activity:
+      typeof raw.activity === "string" && raw.activity.length > 0
+        ? raw.activity
+        : typeof raw.kind === "string" && raw.kind.length > 0
+          ? raw.kind
+        : DEFAULT_ACTIVITY,
+    recurrence: normalizeRecurrence(raw.recurrence),
     date,
     start: typeof raw.start === "string" ? raw.start : "",
     end: typeof raw.end === "string" ? raw.end : "",
@@ -155,8 +180,9 @@ export function createEmptyTodoEvent(date = getTodayKey()): TodoEvent {
   return {
     id: createId(),
     title: "",
-    course: DEFAULT_CATEGORY,
-    kind: DEFAULT_KIND,
+    category: DEFAULT_CATEGORY,
+    activity: DEFAULT_ACTIVITY,
+    recurrence: DEFAULT_RECURRENCE,
     date,
     start: "",
     end: "",
@@ -173,7 +199,7 @@ export function createEmptyTodoEvent(date = getTodayKey()): TodoEvent {
   };
 }
 
-export function sortEvents(events: TodoEvent[]) {
+export function sortEvents<T extends TodoEvent>(events: T[]): T[] {
   const priorityWeight: Record<PriorityLevel, number> = {
     red: 0,
     yellow: 1,
@@ -218,6 +244,31 @@ export function sortEvents(events: TodoEvent[]) {
 
     return left.title.localeCompare(right.title);
   });
+}
+
+export function resolveEventsInRange(
+  events: TodoEvent[],
+  rangeStart: string,
+  rangeEnd: string,
+) {
+  const resolvedEvents = events.flatMap<ResolvedTodoEvent>((event) =>
+    getOccurrenceDatesInRange(
+      event.date,
+      event.recurrence,
+      rangeStart,
+      rangeEnd,
+    ).map((occurrenceDate) => ({
+      ...event,
+      date: occurrenceDate,
+      sourceEventId: event.id,
+      occurrenceId:
+        event.recurrence === "once" && occurrenceDate === event.date
+          ? event.id
+          : `${event.id}::${occurrenceDate}`,
+    })),
+  );
+
+  return sortEvents(resolvedEvents);
 }
 
 export async function loadEventFile() {

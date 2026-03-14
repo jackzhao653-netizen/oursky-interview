@@ -6,19 +6,21 @@ export const CATEGORY_OPTIONS = [
   "Studio",
   "Personal",
 ] as const;
-export const TODO_KINDS = [
+export const ACTIVITY_OPTIONS = [
   "build",
   "review",
   "planning",
   "follow-up",
   "errand",
 ] as const;
+export const RECURRENCE_OPTIONS = ["once", "weekly", "monthly"] as const;
 export const TOP3_LIMIT = 3;
 
 export type PriorityLevel = (typeof PRIORITY_LEVELS)[number];
 export type TodoStatus = (typeof TODO_STATUSES)[number];
 export type TodoCategory = (typeof CATEGORY_OPTIONS)[number];
-export type TodoKind = (typeof TODO_KINDS)[number];
+export type TodoActivity = (typeof ACTIVITY_OPTIONS)[number];
+export type TodoRecurrence = (typeof RECURRENCE_OPTIONS)[number];
 export type CalendarView = "day" | "week";
 
 export type ChecklistItem = {
@@ -30,8 +32,9 @@ export type ChecklistItem = {
 export type TodoEvent = {
   id: string;
   title: string;
-  course: string;
-  kind: string;
+  category: string;
+  activity: string;
+  recurrence: TodoRecurrence;
   date: string;
   start: string;
   end: string;
@@ -47,6 +50,11 @@ export type TodoEvent = {
   order: number;
 };
 
+export type ResolvedTodoEvent = TodoEvent & {
+  sourceEventId: string;
+  occurrenceId: string;
+};
+
 export type TodoEventFile = {
   version: number;
   events: TodoEvent[];
@@ -56,6 +64,6 @@ export type TodoFilters = {
   showOpen: boolean;
   showDone: boolean;
   showCancelled: boolean;
-  hiddenCourses: string[];
+  hiddenCategories: string[];
   selectedPriorities: PriorityLevel[];
 };

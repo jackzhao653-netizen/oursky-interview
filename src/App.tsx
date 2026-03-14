@@ -1,11 +1,21 @@
-import { type CSSProperties, type FormEvent, useEffect, useState } from "react";
 import {
+  type CSSProperties,
+  type FocusEvent,
+  type FormEvent,
+  type MouseEvent as ReactMouseEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import {
+  ACTIVITY_OPTIONS,
   CATEGORY_OPTIONS,
   PRIORITY_LEVELS,
+  RECURRENCE_OPTIONS,
   TOP3_LIMIT,
-  TODO_KINDS,
   type ChecklistItem,
   type PriorityLevel,
+  type ResolvedTodoEvent,
   type TodoEvent,
   type TodoEventFile,
   type TodoFilters,
@@ -17,6 +27,9 @@ import {
   fromDateKey,
   getFullDateLabel,
   getMonthLabel,
+  getNextOccurrenceOnOrAfter,
+  maxDateKey,
+  minDateKey,
   getRelativeDateLabel,
   getShortDateLabel,
   getTodayKey,
@@ -27,6 +40,7 @@ import {
 import {
   createEmptyTodoEvent,
   loadEventFile,
+  resolveEventsInRange,
   saveEventFile,
   sortEvents,
 } from "./utils/storage";
@@ -41,15 +55,22 @@ type ModalState = {
 type QuickAddState = {
   title: string;
   date: string;
-  course: string;
+  category: string;
   priority: PriorityLevel;
+};
+
+type WeekTooltipState = {
+  event: ResolvedTodoEvent;
+  dayKey: string;
+  side: "left" | "right";
+  top: number;
 };
 
 const DEFAULT_FILTERS: TodoFilters = {
   showOpen: true,
   showDone: false,
   showCancelled: false,
-  hiddenCourses: [],
+  hiddenCategories: [],
   selectedPriorities: [...PRIORITY_LEVELS],
 };
 
@@ -81,9 +102,15 @@ const CATEGORY_META: Record<
   },
 };
 
-function getCategoryMeta(course: string) {
+const MONTH_LABELS = Array.from({ length: 12 }, (_, monthIndex) =>
+  new Intl.DateTimeFormat(undefined, { month: "short" }).format(
+    new Date(2026, monthIndex, 1),
+  ),
+);
+
+function getCategoryMeta(category: string) {
   return (
-    CATEGORY_META[course] ?? {
+    CATEGORY_META[category] ?? {
       accent: "#a78bfa",
       soft: "rgba(167,139,250,0.14)",
       border: "rgba(167,139,250,0.35)",
@@ -191,6 +218,52 @@ function getTimeLabel(event: TodoEvent) {
   return "All-day";
 }
 
+function getRecurrenceLabel(recurrence: TodoEvent["recurrence"]) {
+  if (recurrence === "weekly") {
+    return "Weekly";
+  }
+
+  if (recurrence === "monthly") {
+    return "Monthly";
+  }
+
+  return "Once";
+}
+
+function getNotesPreview(notes: string, limit = 90) {
+  const trimmed = notes.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  if (trimmed.length <= limit) {
+    return trimmed;
+  }
+
+  return `${trimmed.slice(0, limit).trimEnd()}...`;
+}
+
+function getWeekTaskTooltip(event: TodoEvent) {
+  const tooltipLines = [
+    event.title,
+    `Date: ${getFullDateLabel(event.date)}`,
+    `Time: ${getTimeLabel(event)}`,
+    `Location: ${event.location || "No location"}`,
+  ];
+
+  const notesPreview = getNotesPreview(event.notes);
+  if (notesPreview) {
+    tooltipLines.push(`Notes: ${notesPreview}`);
+  }
+
+  return tooltipLines.join("\n");
+}
+
+function getDateKeyInMonth(year: number, monthIndex: number, dayOfMonth: number) {
+  const maxDay = new Date(year, monthIndex + 1, 0).getDate();
+  return getTodayKey(new Date(year, monthIndex, Math.min(dayOfMonth, maxDay)));
+}
+
 function loadStoredTheme(): ThemeMode {
   if (typeof window === "undefined") {
     return "dark";
@@ -229,7 +302,7 @@ function matchesFilters(event: TodoEvent, filters: TodoFilters) {
     return false;
   }
 
-  return !filters.hiddenCourses.includes(event.course);
+  return !filters.hiddenCategories.includes(event.category);
 }
 
 function updateEventStatus(event: TodoEvent, status: TodoEvent["status"]) {
@@ -261,7 +334,7 @@ function TodoCard({
   onToggleChecklistItem,
   onToggleTop3,
 }: TodoCardProps) {
-  const categoryMeta = getCategoryMeta(event.course);
+  const categoryMeta = getCategoryMeta(event.category);
   const checklistPreview = event.checklist.slice(0, 3);
   const checklistSummary =
     event.checklist.length > 0 ? getChecklistSummary(event.checklist) : null;
@@ -322,13 +395,16 @@ function TodoCard({
                 background: categoryMeta.soft,
               }}
             >
-              {event.course}
+              {event.category}
             </span>
-            <span className="pill">{event.kind}</span>
+            <span className="pill">{event.activity}</span>
             <span className={`pill pill--status status-${event.status}`}>
               {statusLabel}
             </span>
             <span className="pill">{getTimeLabel(event)}</span>
+            {event.recurrence !== "once" ? (
+              <span className="pill">{getRecurrenceLabel(event.recurrence)}</span>
+            ) : null}
           </div>
 
           {checklistSummary ? (
@@ -364,17 +440,29 @@ function TodoCard({
 }
 
 type WeekTodoButtonProps = {
-  event: TodoEvent;
+  event: ResolvedTodoEvent;
+  tooltipSide: "left" | "right";
   onSelect: () => void;
+  onHover: (
+    hoverEvent: ReactMouseEvent<HTMLButtonElement> | FocusEvent<HTMLButtonElement>,
+  ) => void;
+  onLeave: () => void;
 };
 
-function WeekTodoButton({ event, onSelect }: WeekTodoButtonProps) {
-  const categoryMeta = getCategoryMeta(event.course);
+function WeekTodoButton({
+  event,
+  tooltipSide,
+  onSelect,
+  onHover,
+  onLeave,
+}: WeekTodoButtonProps) {
+  const categoryMeta = getCategoryMeta(event.category);
 
   return (
     <button
       type="button"
       className={`week-task ${event.status !== "open" ? "is-muted" : ""}`}
+      data-tooltip-side={tooltipSide}
       style={
         {
           "--event-accent": categoryMeta.accent,
@@ -382,7 +470,11 @@ function WeekTodoButton({ event, onSelect }: WeekTodoButtonProps) {
         } as CSSProperties
       }
       onClick={onSelect}
-      title={event.title}
+      title={getWeekTaskTooltip(event)}
+      onMouseEnter={onHover}
+      onFocus={onHover}
+      onMouseLeave={onLeave}
+      onBlur={onLeave}
     >
       <span className="week-task__line">
         <PriorityBadge priority={event.priority} dotOnly />
@@ -413,9 +505,15 @@ function App() {
   const [quickAdd, setQuickAdd] = useState<QuickAddState>({
     title: "",
     date: todayKey,
-    course: CATEGORY_OPTIONS[0],
+    category: CATEGORY_OPTIONS[0],
     priority: "green",
   });
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [pickerYear, setPickerYear] = useState(() =>
+    `${fromDateKey(todayKey).getFullYear()}`,
+  );
+  const [weekTooltip, setWeekTooltip] = useState<WeekTooltipState | null>(null);
+  const datePickerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -451,10 +549,64 @@ function App() {
     window.localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
 
-  const courseOptions = Array.from(
-    new Set([...CATEGORY_OPTIONS, ...file.events.map((event) => event.course)]),
+  useEffect(() => {
+    if (!isDatePickerOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      if (
+        datePickerRef.current &&
+        !datePickerRef.current.contains(event.target as Node)
+      ) {
+        setIsDatePickerOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsDatePickerOpen(false);
+      }
+    }
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isDatePickerOpen]);
+
+  const categoryOptions = Array.from(
+    new Set([...CATEGORY_OPTIONS, ...file.events.map((event) => event.category)]),
   );
-  const visibleEvents = file.events.filter((event) =>
+  const weekStartKey = getTodayKey(startOfWeek(cursorDate));
+  const weekEndKey = getTodayKey(addDays(startOfWeek(cursorDate), 6));
+  const weekDays = Array.from({ length: 7 }, (_, index) =>
+    addDays(startOfWeek(cursorDate), index),
+  );
+  const miniMonthDays = createMiniMonthDays(miniMonthDate);
+  const miniMonthStartKey = getTodayKey(miniMonthDays[0]);
+  const miniMonthEndKey = getTodayKey(miniMonthDays[miniMonthDays.length - 1]);
+  const resolvedRangeStart = minDateKey(
+    todayKey,
+    selectedDateKey,
+    weekStartKey,
+    miniMonthStartKey,
+  );
+  const resolvedRangeEnd = maxDateKey(
+    todayKey,
+    selectedDateKey,
+    weekEndKey,
+    miniMonthEndKey,
+  );
+  const resolvedEvents = resolveEventsInRange(
+    file.events,
+    resolvedRangeStart,
+    resolvedRangeEnd,
+  );
+  const visibleEvents = resolvedEvents.filter((event) =>
     matchesFilters(event, filters),
   );
   const selectedDateEvents = visibleEvents.filter(
@@ -463,9 +615,30 @@ function App() {
   const todayEvents = visibleEvents.filter(
     (event) => event.date === todayKey && event.status === "open",
   );
-  const top3Events = visibleEvents
+  const top3Events = file.events
     .filter((event) => event.top3Date === todayKey && event.status === "open")
-    .sort((left, right) => compareDateKeys(left.date, right.date));
+    .map<ResolvedTodoEvent>((event) => {
+      const occurrenceDate =
+        event.recurrence === "once"
+          ? event.date
+          : (getNextOccurrenceOnOrAfter(
+              event.date,
+              event.recurrence,
+              todayKey,
+            ) ?? event.date);
+
+      return {
+        ...event,
+        date: occurrenceDate,
+        sourceEventId: event.id,
+        occurrenceId:
+          event.recurrence === "once" && occurrenceDate === event.date
+            ? event.id
+            : `${event.id}::${occurrenceDate}`,
+      };
+    })
+    .sort((left, right) => compareDateKeys(left.date, right.date))
+    .filter((event) => event.title.trim().length > 0);
   const openCount = file.events.filter(
     (event) => event.status === "open",
   ).length;
@@ -474,15 +647,13 @@ function App() {
   ).length;
   const overdueCount = file.events.filter(
     (event) =>
-      event.status === "open" && compareDateKeys(event.date, todayKey) < 0,
+      event.status === "open" &&
+      event.recurrence === "once" &&
+      compareDateKeys(event.date, todayKey) < 0,
   ).length;
   const selectedDateLabel = getFullDateLabel(selectedDateKey);
   const mainLabel = view === "day" ? selectedDateKey : getWeekLabel(cursorDate);
-  const weekDays = Array.from({ length: 7 }, (_, index) =>
-    addDays(startOfWeek(cursorDate), index),
-  );
-  const miniMonthDays = createMiniMonthDays(miniMonthDate);
-  const eventsByDate = visibleEvents.reduce<Record<string, TodoEvent[]>>(
+  const eventsByDate = visibleEvents.reduce<Record<string, ResolvedTodoEvent[]>>(
     (grouped, event) => {
       grouped[event.date] ??= [];
       grouped[event.date].push(event);
@@ -498,8 +669,14 @@ function App() {
     }));
   }
 
+  function getSourceEvent(eventId: string) {
+    return file.events.find((event) => event.id === eventId) ?? null;
+  }
+
   function selectDate(dateKey: string, nextView?: "day" | "week") {
     const nextDate = fromDateKey(dateKey);
+    setWeekTooltip(null);
+    setIsDatePickerOpen(false);
     setSelectedDateKey(dateKey);
     setCursorDate(nextDate);
     setMiniMonthDate(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1));
@@ -613,7 +790,7 @@ function App() {
 
     const nextEvent = createEmptyTodoEvent(quickAdd.date);
     nextEvent.title = title;
-    nextEvent.course = quickAdd.course;
+    nextEvent.category = quickAdd.category;
     nextEvent.priority = quickAdd.priority;
     nextEvent.order = Date.now();
 
@@ -713,7 +890,49 @@ function App() {
     setDraft((current) => updateEventStatus(current, status));
   }
 
+  function jumpToMonthYear(monthIndex: number) {
+    const parsedYear = Number(pickerYear);
+    if (!Number.isInteger(parsedYear) || parsedYear < 1) {
+      setNotice("Enter a valid year.");
+      return;
+    }
+
+    const selectedDay = fromDateKey(selectedDateKey).getDate();
+    selectDate(getDateKeyInMonth(parsedYear, monthIndex, selectedDay));
+    setIsDatePickerOpen(false);
+  }
+
+  function handleWeekTooltipHover(
+    hoverEvent:
+      | ReactMouseEvent<HTMLButtonElement>
+      | FocusEvent<HTMLButtonElement>,
+    event: ResolvedTodoEvent,
+    dayKey: string,
+    side: "left" | "right",
+  ) {
+    const targetRect = hoverEvent.currentTarget.getBoundingClientRect();
+    const weekCell = hoverEvent.currentTarget.closest(".week-cell");
+
+    if (!weekCell) {
+      return;
+    }
+
+    const weekCellRect = weekCell.getBoundingClientRect();
+
+    setWeekTooltip({
+      event,
+      dayKey,
+      side,
+      top: targetRect.top - weekCellRect.top + targetRect.height / 2,
+    });
+  }
+
+  function clearWeekTooltip() {
+    setWeekTooltip(null);
+  }
+
   function changeCursor(step: number) {
+    clearWeekTooltip();
     const nextDate = addDays(cursorDate, view === "day" ? step : step * 7);
     setCursorDate(nextDate);
     setSelectedDateKey(getTodayKey(nextDate));
@@ -722,6 +941,7 @@ function App() {
   }
 
   function jumpToToday() {
+    clearWeekTooltip();
     selectDate(todayKey);
   }
 
@@ -790,17 +1010,22 @@ function App() {
                   ) : (
                     top3Events.map((event) => (
                       <button
-                        key={event.id}
+                        key={event.occurrenceId}
                         type="button"
                         className="top3-item"
-                        onClick={() => openEditModal(event)}
+                        onClick={() => {
+                          const sourceEvent = getSourceEvent(event.sourceEventId);
+                          if (sourceEvent) {
+                            openEditModal(sourceEvent);
+                          }
+                        }}
                       >
                         <span className="top3-item__header">
                           <PriorityBadge priority={event.priority} compact />
-                          <span className="top3-item__title">{event.title}</span>
+                        <span className="top3-item__title">{event.title}</span>
                         </span>
                         <span className="top3-item__meta">
-                          <span>{event.course}</span>
+                          <span>{event.category}</span>
                           <span>
                             {getRelativeDateLabel(event.date, todayKey)}
                           </span>
@@ -835,18 +1060,18 @@ function App() {
                   aria-label="Quick add due date"
                 />
                 <select
-                  value={quickAdd.course}
+                  value={quickAdd.category}
                   onChange={(event) =>
                     setQuickAdd((current) => ({
                       ...current,
-                      course: event.target.value,
+                      category: event.target.value,
                     }))
                   }
                   aria-label="Quick add category"
                 >
-                  {courseOptions.map((course) => (
-                    <option key={course} value={course}>
-                      {course}
+                  {categoryOptions.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
                     </option>
                   ))}
                 </select>
@@ -881,26 +1106,91 @@ function App() {
                   <span className="pill">Filters</span>
                 </h2>
                 <div className="body">
-                  <div className="nav-row">
+                  <div className="nav-row month-jump" ref={datePickerRef}>
                     <button
                       type="button"
-                      onClick={() =>
-                        setMiniMonthDate(addMonths(miniMonthDate, -1))
-                      }
+                      onClick={() => {
+                        setIsDatePickerOpen(false);
+                        setMiniMonthDate(addMonths(miniMonthDate, -1));
+                      }}
                     >
                       ◀
                     </button>
-                    <span className="pill mono">
-                      {getMonthLabel(miniMonthDate)}
-                    </span>
                     <button
                       type="button"
+                      className={`pill mono month-jump__trigger ${isDatePickerOpen ? "is-active" : ""}`}
                       onClick={() =>
-                        setMiniMonthDate(addMonths(miniMonthDate, 1))
+                        setIsDatePickerOpen((current) => {
+                          if (!current) {
+                            setPickerYear(`${miniMonthDate.getFullYear()}`);
+                          }
+
+                          return !current;
+                        })
                       }
+                      aria-expanded={isDatePickerOpen}
+                      aria-haspopup="dialog"
+                    >
+                      {getMonthLabel(miniMonthDate)}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsDatePickerOpen(false);
+                        setMiniMonthDate(addMonths(miniMonthDate, 1));
+                      }}
                     >
                       ▶
                     </button>
+
+                    {isDatePickerOpen ? (
+                      <div
+                        className="month-jump__popover"
+                        role="dialog"
+                        aria-label="Choose month and year"
+                      >
+                        <div className="month-jump__header">
+                          <p className="eyebrow">Jump to month</p>
+                          <button
+                            type="button"
+                            className="pill pill--ghost"
+                            onClick={() => setIsDatePickerOpen(false)}
+                          >
+                            Close
+                          </button>
+                        </div>
+
+                        <label className="month-jump__year">
+                          Year
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min="1"
+                            value={pickerYear}
+                            onChange={(event) => setPickerYear(event.target.value)}
+                          />
+                        </label>
+
+                        <div className="month-jump__grid">
+                          {MONTH_LABELS.map((label, monthIndex) => {
+                            const isActive =
+                              Number(pickerYear) === miniMonthDate.getFullYear() &&
+                              monthIndex === miniMonthDate.getMonth();
+
+                            return (
+                              <button
+                                key={label}
+                                type="button"
+                                className={`month-jump__month ${isActive ? "is-active" : ""}`}
+                                onClick={() => jumpToMonthYear(monthIndex)}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="mini-calendar">
@@ -979,27 +1269,25 @@ function App() {
 
                   <div className="sidebar-group">
                     <div className="sidebar-label">Tags</div>
-                    <div
-                      className="filter-tag-row"
-                      aria-label="Category and priority filters"
-                    >
-                      {courseOptions.map((course) => {
-                        const categoryMeta = getCategoryMeta(course);
-                        const isActive = !filters.hiddenCourses.includes(course);
+                    <div className="filter-tag-row" aria-label="Tag filters">
+                      {categoryOptions.map((category) => {
+                        const categoryMeta = getCategoryMeta(category);
+                        const isActive =
+                          !filters.hiddenCategories.includes(category);
 
                         return (
                           <button
-                            key={course}
+                            key={category}
                             type="button"
                             className={`pill filter-tag ${isActive ? "is-active" : "is-inactive"}`}
                             aria-pressed={isActive}
                             onClick={() =>
                               setFilters((current) => ({
                                 ...current,
-                                hiddenCourses: isActive
-                                  ? [...current.hiddenCourses, course]
-                                  : current.hiddenCourses.filter(
-                                      (value) => value !== course,
+                                hiddenCategories: isActive
+                                  ? [...current.hiddenCategories, category]
+                                  : current.hiddenCategories.filter(
+                                      (value) => value !== category,
                                     ),
                               }))
                             }
@@ -1017,11 +1305,16 @@ function App() {
                               aria-hidden="true"
                               style={{ background: categoryMeta.accent }}
                             />
-                            <span>{course}</span>
+                            <span>{category}</span>
                           </button>
                         );
                       })}
+                    </div>
+                  </div>
 
+                  <div className="sidebar-group">
+                    <div className="sidebar-label">Priorities</div>
+                    <div className="filter-tag-row" aria-label="Priority filters">
                       {PRIORITY_LEVELS.map((priority) => {
                         const isActive =
                           filters.selectedPriorities.includes(priority);
@@ -1050,6 +1343,7 @@ function App() {
                             aria-label={`${getPriorityMeta(priority).label} priority filter`}
                           >
                             <PriorityBadge priority={priority} dotOnly />
+                            <span>{getPriorityMeta(priority).label}</span>
                           </button>
                         );
                       })}
@@ -1102,14 +1396,20 @@ function App() {
                     <button
                       type="button"
                       className={view === "day" ? "primary" : ""}
-                      onClick={() => setView("day")}
+                      onClick={() => {
+                        clearWeekTooltip();
+                        setView("day");
+                      }}
                     >
                       Day
                     </button>
                     <button
                       type="button"
                       className={view === "week" ? "primary" : ""}
-                      onClick={() => setView("week")}
+                      onClick={() => {
+                        clearWeekTooltip();
+                        setView("week");
+                      }}
                     >
                       Week
                     </button>
@@ -1145,16 +1445,21 @@ function App() {
                       ) : (
                         selectedDateEvents.map((event) => (
                           <TodoCard
-                            key={event.id}
+                            key={event.occurrenceId}
                             event={event}
                             todayKey={todayKey}
-                            isSelected={modal.eventId === event.id}
-                            onOpen={() => openEditModal(event)}
-                            onToggleTodo={() => handleToggleTodo(event.id)}
+                            isSelected={modal.eventId === event.sourceEventId}
+                            onOpen={() => {
+                              const sourceEvent = getSourceEvent(event.sourceEventId);
+                              if (sourceEvent) {
+                                openEditModal(sourceEvent);
+                              }
+                            }}
+                            onToggleTodo={() => handleToggleTodo(event.sourceEventId)}
                             onToggleChecklistItem={(itemId) =>
-                              handleToggleChecklistItem(event.id, itemId)
+                              handleToggleChecklistItem(event.sourceEventId, itemId)
                             }
-                            onToggleTop3={() => handleToggleTop3(event.id)}
+                            onToggleTop3={() => handleToggleTop3(event.sourceEventId)}
                           />
                         ))
                       )}
@@ -1171,6 +1476,9 @@ function App() {
                           <section
                             key={dateKey}
                             className={`week-cell ${dateKey === todayKey ? "is-today" : ""} ${dateKey === selectedDateKey ? "is-selected" : ""}`}
+                            style={
+                              weekTooltip?.dayKey === dateKey ? { zIndex: 4 } : undefined
+                            }
                           >
                             <button
                               type="button"
@@ -1181,25 +1489,72 @@ function App() {
                                 <span className="mono">{dateKey.slice(5)}</span>
                                 <strong>{getWeekdayLabel(dateKey)}</strong>
                               </div>
-                              <span className="pill">
-                                {events.length} task
-                                {events.length === 1 ? "" : "s"}
-                              </span>
                             </button>
 
                             <div className="week-task-list calendar-scroll">
                               {events.length === 0 ? (
                                 <p className="empty">—</p>
                               ) : (
-                                events.map((event) => (
-                                  <WeekTodoButton
-                                    key={event.id}
-                                    event={event}
-                                    onSelect={() => selectDate(event.date, "day")}
-                                  />
-                                ))
+                                events.map((event) => {
+                                  const tooltipSide =
+                                    day.getDay() === 0 ? "left" : "right";
+
+                                  return (
+                                    <WeekTodoButton
+                                      key={event.occurrenceId}
+                                      event={event}
+                                      tooltipSide={tooltipSide}
+                                      onHover={(hoverEvent) =>
+                                        handleWeekTooltipHover(
+                                          hoverEvent,
+                                          event,
+                                          dateKey,
+                                          tooltipSide,
+                                        )
+                                      }
+                                      onLeave={clearWeekTooltip}
+                                      onSelect={() => selectDate(event.date, "day")}
+                                    />
+                                  );
+                                })
                               )}
                             </div>
+
+                            {weekTooltip?.dayKey === dateKey ? (
+                              <div className="week-cell__tooltip-layer" aria-hidden="true">
+                                <article
+                                  className={`week-tooltip week-tooltip--${weekTooltip.side}`}
+                                  style={{ top: `${weekTooltip.top}px` }}
+                                >
+                                  <p className="week-tooltip__title">
+                                    {weekTooltip.event.title}
+                                  </p>
+                                  <dl className="week-tooltip__details">
+                                    <div>
+                                      <dt>Date</dt>
+                                      <dd>{getFullDateLabel(weekTooltip.event.date)}</dd>
+                                    </div>
+                                    <div>
+                                      <dt>Time</dt>
+                                      <dd>{getTimeLabel(weekTooltip.event)}</dd>
+                                    </div>
+                                    <div>
+                                      <dt>Location</dt>
+                                      <dd>
+                                        {weekTooltip.event.location || "No location"}
+                                      </dd>
+                                    </div>
+                                    <div>
+                                      <dt>Notes</dt>
+                                      <dd>
+                                        {getNotesPreview(weekTooltip.event.notes) ||
+                                          "No notes"}
+                                      </dd>
+                                    </div>
+                                  </dl>
+                                </article>
+                              </div>
+                            ) : null}
                           </section>
                         );
                       })}
@@ -1260,19 +1615,19 @@ function App() {
                     />
                   </label>
                   <label>
-                    Course
+                    Category
                     <select
-                      value={draft.course}
+                      value={draft.category}
                       onChange={(event) =>
                         setDraft((current) => ({
                           ...current,
-                          course: event.target.value,
+                          category: event.target.value,
                         }))
                       }
                     >
-                      {courseOptions.map((course) => (
-                        <option key={course} value={course}>
-                          {course}
+                      {categoryOptions.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
                         </option>
                       ))}
                     </select>
@@ -1308,24 +1663,45 @@ function App() {
                   </label>
                 </div>
 
-                <label>
-                  Kind
-                  <select
-                    value={draft.kind}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        kind: event.target.value,
-                      }))
-                    }
-                  >
-                    {TODO_KINDS.map((kind) => (
-                      <option key={kind} value={kind}>
-                        {kind}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <div className="form-grid">
+                  <label>
+                    Kind
+                    <select
+                      value={draft.activity}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          activity: event.target.value,
+                        }))
+                      }
+                    >
+                      {ACTIVITY_OPTIONS.map((activity) => (
+                        <option key={activity} value={activity}>
+                          {activity}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Recurrence
+                    <select
+                      value={draft.recurrence}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          recurrence: event.target.value as TodoEvent["recurrence"],
+                        }))
+                      }
+                    >
+                      {RECURRENCE_OPTIONS.map((recurrence) => (
+                        <option key={recurrence} value={recurrence}>
+                          {getRecurrenceLabel(recurrence)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
 
                 <div className="field-group">
                   <span>Priority</span>
