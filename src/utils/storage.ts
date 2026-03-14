@@ -130,6 +130,9 @@ function normalizeEvent(event: unknown, index: number): TodoEvent {
           ? raw.kind
         : DEFAULT_ACTIVITY,
     recurrence: normalizeRecurrence(raw.recurrence),
+    recurrenceCount: typeof raw.recurrenceCount === "number" ? raw.recurrenceCount : null,
+    recurrenceEndDate: typeof raw.recurrenceEndDate === "string" && raw.recurrenceEndDate.length > 0 ? raw.recurrenceEndDate : null,
+    completedOccurrences: Array.isArray(raw.completedOccurrences) ? raw.completedOccurrences.filter((d): d is string => typeof d === "string") : [],
     date,
     start: typeof raw.start === "string" ? raw.start : "",
     end: typeof raw.end === "string" ? raw.end : "",
