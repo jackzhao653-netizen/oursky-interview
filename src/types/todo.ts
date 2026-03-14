@@ -1,4 +1,4 @@
-export const PRIORITY_LEVELS = ["P1", "P2", "P3", "P4"] as const;
+export const PRIORITY_LEVELS = ["red", "yellow", "green", "white"] as const;
 export const TODO_STATUSES = ["open", "done", "cancelled"] as const;
 export const CATEGORY_OPTIONS = [
   "Product",
@@ -57,4 +57,5 @@ export type TodoFilters = {
   showDone: boolean;
   showCancelled: boolean;
   hiddenCourses: string[];
+  selectedPriorities: PriorityLevel[];
 };

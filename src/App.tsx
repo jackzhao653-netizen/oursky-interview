@@ -50,6 +50,7 @@ const DEFAULT_FILTERS: TodoFilters = {
   showDone: false,
   showCancelled: false,
   hiddenCourses: [],
+  selectedPriorities: [...PRIORITY_LEVELS],
 };
 
 const THEME_STORAGE_KEY = "oursky-todo-theme";
@@ -87,6 +88,85 @@ function getCategoryMeta(course: string) {
       soft: "rgba(167,139,250,0.14)",
       border: "rgba(167,139,250,0.35)",
     }
+  );
+}
+
+const PRIORITY_META: Record<
+  PriorityLevel,
+  {
+    label: string;
+    description: string;
+    color: string;
+    soft: string;
+    border: string;
+  }
+> = {
+  red: {
+    label: "Red",
+    description: "Urgent/Critical",
+    color: "var(--priority-red)",
+    soft: "var(--priority-red-soft)",
+    border: "var(--priority-red-border)",
+  },
+  yellow: {
+    label: "Yellow",
+    description: "Important",
+    color: "var(--priority-yellow)",
+    soft: "var(--priority-yellow-soft)",
+    border: "var(--priority-yellow-border)",
+  },
+  green: {
+    label: "Green",
+    description: "Normal",
+    color: "var(--priority-green)",
+    soft: "var(--priority-green-soft)",
+    border: "var(--priority-green-border)",
+  },
+  white: {
+    label: "White",
+    description: "Low priority",
+    color: "var(--priority-white)",
+    soft: "var(--priority-white-soft)",
+    border: "var(--priority-white-border)",
+  },
+};
+
+function getPriorityMeta(priority: PriorityLevel) {
+  return PRIORITY_META[priority];
+}
+
+type PriorityBadgeProps = {
+  priority: PriorityLevel;
+  showDescription?: boolean;
+  compact?: boolean;
+};
+
+function PriorityBadge({
+  priority,
+  showDescription = false,
+  compact = false,
+}: PriorityBadgeProps) {
+  const meta = getPriorityMeta(priority);
+
+  return (
+    <span
+      className={`priority-mark ${compact ? "is-compact" : ""}`}
+      style={
+        {
+          "--priority-color": meta.color,
+          "--priority-soft": meta.soft,
+          "--priority-border": meta.border,
+        } as CSSProperties
+      }
+    >
+      <span className="priority-dot" aria-hidden="true" />
+      <span className="priority-mark__copy">
+        <span className="priority-mark__label">{meta.label}</span>
+        {showDescription ? (
+          <span className="priority-mark__description">{meta.description}</span>
+        ) : null}
+      </span>
+    </span>
   );
 }
 
@@ -141,7 +221,7 @@ function matchesFilters(event: TodoEvent, filters: TodoFilters) {
     (filters.showDone && event.status === "done") ||
     (filters.showCancelled && event.status === "cancelled");
 
-  if (!matchesStatus) {
+  if (!matchesStatus || !filters.selectedPriorities.includes(event.priority)) {
     return false;
   }
 
@@ -211,7 +291,10 @@ function TodoCard({
         <div className="todo-card__content">
           <div className="todo-card__heading">
             <div>
-              <h3>{event.title}</h3>
+              <div className="todo-card__titleline">
+                <PriorityBadge priority={event.priority} compact />
+                <h3>{event.title}</h3>
+              </div>
               <p>{getRelativeDateLabel(event.date, todayKey)}</p>
             </div>
 
@@ -238,7 +321,6 @@ function TodoCard({
               {event.course}
             </span>
             <span className="pill">{event.kind}</span>
-            <span className="pill">{event.priority}</span>
             <span className={`pill pill--status status-${event.status}`}>
               {statusLabel}
             </span>
@@ -298,7 +380,10 @@ function WeekTodoButton({ event, onSelect }: WeekTodoButtonProps) {
       onClick={onSelect}
       title={event.title}
     >
-      <span className="week-task__title">{event.title}</span>
+      <span className="week-task__line">
+        <PriorityBadge priority={event.priority} compact />
+        <span className="week-task__title">{event.title}</span>
+      </span>
     </button>
   );
 }
@@ -325,7 +410,7 @@ function App() {
     title: "",
     date: todayKey,
     course: CATEGORY_OPTIONS[0],
-    priority: "P2",
+    priority: "green",
   });
 
   useEffect(() => {
@@ -371,10 +456,10 @@ function App() {
   const selectedDateEvents = visibleEvents.filter(
     (event) => event.date === selectedDateKey,
   );
-  const todayEvents = file.events.filter(
+  const todayEvents = visibleEvents.filter(
     (event) => event.date === todayKey && event.status === "open",
   );
-  const top3Events = file.events
+  const top3Events = visibleEvents
     .filter((event) => event.top3Date === todayKey && event.status === "open")
     .sort((left, right) => compareDateKeys(left.date, right.date));
   const openCount = file.events.filter(
@@ -706,9 +791,11 @@ function App() {
                         className="top3-item"
                         onClick={() => openEditModal(event)}
                       >
-                        <span className="top3-item__title">{event.title}</span>
+                        <span className="top3-item__header">
+                          <PriorityBadge priority={event.priority} compact />
+                          <span className="top3-item__title">{event.title}</span>
+                        </span>
                         <span className="top3-item__meta">
-                          <span>{event.priority}</span>
                           <span>{event.course}</span>
                           <span>
                             {getRelativeDateLabel(event.date, todayKey)}
@@ -771,7 +858,7 @@ function App() {
                 >
                   {PRIORITY_LEVELS.map((priority) => (
                     <option key={priority} value={priority}>
-                      {priority}
+                      {`${getPriorityMeta(priority).label} - ${getPriorityMeta(priority).description}`}
                     </option>
                   ))}
                 </select>
@@ -917,6 +1004,41 @@ function App() {
                           >
                             {course}
                           </span>
+                        </label>
+                      );
+                    })}
+
+                    <div className="sidebar-group__split" />
+                    <div className="sidebar-label">Priority colors</div>
+                    {PRIORITY_LEVELS.map((priority) => {
+                      const checked =
+                        filters.selectedPriorities.includes(priority);
+
+                      return (
+                        <label key={priority} className="toggle-row">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) =>
+                              setFilters((current) => ({
+                                ...current,
+                                selectedPriorities: event.target.checked
+                                  ? Array.from(
+                                      new Set([
+                                        ...current.selectedPriorities,
+                                        priority,
+                                      ]),
+                                    )
+                                  : current.selectedPriorities.filter(
+                                      (value) => value !== priority,
+                                    ),
+                              }))
+                            }
+                          />
+                          <PriorityBadge
+                            priority={priority}
+                            showDescription
+                          />
                         </label>
                       );
                     })}
@@ -1095,259 +1217,272 @@ function App() {
               <span className="pill">Checklist</span>
             </h2>
 
-            <form className="body modal-form" onSubmit={handleSaveDraft}>
-              <label>
-                Title
-                <input
-                  value={draft.title}
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      title: event.target.value,
-                    }))
-                  }
-                  placeholder="Outline the task"
-                />
-              </label>
-
-              <div className="form-grid">
+            <form className="modal-form" onSubmit={handleSaveDraft}>
+              <div className="body modal-form__scroll">
                 <label>
-                  Due date
+                  Title
                   <input
-                    type="date"
-                    value={draft.date}
+                    value={draft.title}
                     onChange={(event) =>
                       setDraft((current) => ({
                         ...current,
-                        date: event.target.value,
+                        title: event.target.value,
                       }))
                     }
+                    placeholder="Outline the task"
                   />
                 </label>
-                <label>
-                  Category
-                  <select
-                    value={draft.course}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        course: event.target.value,
-                      }))
-                    }
-                  >
-                    {courseOptions.map((course) => (
-                      <option key={course} value={course}>
-                        {course}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
 
-              <div className="form-grid">
-                <label>
-                  Priority
-                  <select
-                    value={draft.priority}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        priority: event.target.value as PriorityLevel,
-                      }))
-                    }
-                  >
-                    {PRIORITY_LEVELS.map((priority) => (
-                      <option key={priority} value={priority}>
-                        {priority}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Kind
-                  <select
-                    value={draft.kind}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        kind: event.target.value,
-                      }))
-                    }
-                  >
-                    {TODO_KINDS.map((kind) => (
-                      <option key={kind} value={kind}>
-                        {kind}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              <div className="form-grid">
-                <label>
-                  Start
-                  <input
-                    type="time"
-                    value={draft.start}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        start: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <label>
-                  End
-                  <input
-                    type="time"
-                    value={draft.end}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        end: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-              </div>
-
-              <div className="form-grid">
-                <label>
-                  Context
-                  <input
-                    value={draft.location}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        location: event.target.value,
-                      }))
-                    }
-                    placeholder="Desk, Figma, phone, commute"
-                  />
-                </label>
-                <label>
-                  Add to today&apos;s Top 3
-                  <button
-                    type="button"
-                    className={`toggle-pill ${draft.top3Date === todayKey ? "is-active" : ""}`}
-                    onClick={() =>
-                      setDraft((current) => ({
-                        ...current,
-                        top3Date:
-                          current.top3Date === todayKey ? null : todayKey,
-                      }))
-                    }
-                  >
-                    {draft.top3Date === todayKey ? "Pinned" : "Not pinned"}
-                  </button>
-                </label>
-              </div>
-
-              <div className="status-row">
-                {(["open", "done", "cancelled"] as const).map((status) => (
-                  <button
-                    key={status}
-                    type="button"
-                    className={`pill pill--ghost ${draft.status === status ? "is-focus" : ""}`}
-                    onClick={() => handleDraftStatus(status)}
-                  >
-                    {status}
-                  </button>
-                ))}
-              </div>
-
-              <label>
-                Notes
-                <textarea
-                  value={draft.notes}
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      notes: event.target.value,
-                    }))
-                  }
-                  placeholder="Supporting context, dependencies, or next action"
-                />
-              </label>
-
-              <div className="checklist-editor">
-                <div className="checklist-editor__header">
-                  <span>Checklist items</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setDraft((current) => ({
-                        ...current,
-                        checklist: [
-                          ...current.checklist,
-                          {
-                            id:
-                              typeof crypto !== "undefined" &&
-                              "randomUUID" in crypto
-                                ? crypto.randomUUID()
-                                : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-                            text: "",
-                            done: false,
-                          },
-                        ],
-                      }))
-                    }
-                  >
-                    Add item
-                  </button>
+                <div className="form-grid">
+                  <label>
+                    Due date
+                    <input
+                      type="date"
+                      value={draft.date}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          date: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Category
+                    <select
+                      value={draft.course}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          course: event.target.value,
+                        }))
+                      }
+                    >
+                      {courseOptions.map((course) => (
+                        <option key={course} value={course}>
+                          {course}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
 
-                <div className="checklist-editor__list">
-                  {draft.checklist.length === 0 ? (
-                    <p className="empty">
-                      Break the todo into subtasks when needed.
-                    </p>
-                  ) : (
-                    draft.checklist.map((item) => (
-                      <div key={item.id} className="checklist-editor__item">
-                        <input
-                          type="checkbox"
-                          checked={item.done}
-                          onChange={() =>
-                            updateChecklistItem(item.id, (current) => ({
-                              ...current,
-                              done: !current.done,
-                            }))
-                          }
-                        />
-                        <input
-                          value={item.text}
-                          onChange={(event) =>
-                            updateChecklistItem(item.id, (current) => ({
-                              ...current,
-                              text: event.target.value,
-                            }))
-                          }
-                          placeholder="Describe a subtask"
-                        />
+                <div className="form-grid">
+                  <div className="field-group">
+                    <span>Priority</span>
+                    <div
+                      className="priority-selection"
+                      role="radiogroup"
+                      aria-label="Priority"
+                    >
+                      {PRIORITY_LEVELS.map((priority) => (
                         <button
+                          key={priority}
                           type="button"
-                          className="danger"
+                          role="radio"
+                          aria-checked={draft.priority === priority}
+                          className={`priority-option ${draft.priority === priority ? "is-active" : ""}`}
                           onClick={() =>
                             setDraft((current) => ({
                               ...current,
-                              checklist: current.checklist.filter(
-                                (entry) => entry.id !== item.id,
-                              ),
+                              priority,
                             }))
                           }
                         >
-                          Remove
+                          <PriorityBadge
+                            priority={priority}
+                            showDescription
+                          />
                         </button>
-                      </div>
-                    ))
-                  )}
+                      ))}
+                    </div>
+                  </div>
+                  <label>
+                    Kind
+                    <select
+                      value={draft.kind}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          kind: event.target.value,
+                        }))
+                      }
+                    >
+                      {TODO_KINDS.map((kind) => (
+                        <option key={kind} value={kind}>
+                          {kind}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <div className="form-grid">
+                  <label>
+                    Start
+                    <input
+                      type="time"
+                      value={draft.start}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          start: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    End
+                    <input
+                      type="time"
+                      value={draft.end}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          end: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+
+                <div className="form-grid">
+                  <label>
+                    Context
+                    <input
+                      value={draft.location}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          location: event.target.value,
+                        }))
+                      }
+                      placeholder="Desk, Figma, phone, commute"
+                    />
+                  </label>
+                  <label>
+                    Add to today&apos;s Top 3
+                    <button
+                      type="button"
+                      className={`toggle-pill ${draft.top3Date === todayKey ? "is-active" : ""}`}
+                      onClick={() =>
+                        setDraft((current) => ({
+                          ...current,
+                          top3Date:
+                            current.top3Date === todayKey ? null : todayKey,
+                        }))
+                      }
+                    >
+                      {draft.top3Date === todayKey ? "Pinned" : "Not pinned"}
+                    </button>
+                  </label>
+                </div>
+
+                <div className="status-row">
+                  {(["open", "done", "cancelled"] as const).map((status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      className={`pill pill--ghost ${draft.status === status ? "is-focus" : ""}`}
+                      onClick={() => handleDraftStatus(status)}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
+
+                <label>
+                  Notes
+                  <textarea
+                    value={draft.notes}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        notes: event.target.value,
+                      }))
+                    }
+                    placeholder="Supporting context, dependencies, or next action"
+                  />
+                </label>
+
+                <div className="checklist-editor">
+                  <div className="checklist-editor__header">
+                    <span>Checklist items</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDraft((current) => ({
+                          ...current,
+                          checklist: [
+                            ...current.checklist,
+                            {
+                              id:
+                                typeof crypto !== "undefined" &&
+                                "randomUUID" in crypto
+                                  ? crypto.randomUUID()
+                                  : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                              text: "",
+                              done: false,
+                            },
+                          ],
+                        }))
+                      }
+                    >
+                      Add item
+                    </button>
+                  </div>
+
+                  <div className="checklist-editor__list">
+                    {draft.checklist.length === 0 ? (
+                      <p className="empty">
+                        Break the todo into subtasks when needed.
+                      </p>
+                    ) : (
+                      draft.checklist.map((item) => (
+                        <div key={item.id} className="checklist-editor__item">
+                          <input
+                            type="checkbox"
+                            checked={item.done}
+                            onChange={() =>
+                              updateChecklistItem(item.id, (current) => ({
+                                ...current,
+                                done: !current.done,
+                              }))
+                            }
+                          />
+                          <input
+                            value={item.text}
+                            onChange={(event) =>
+                              updateChecklistItem(item.id, (current) => ({
+                                ...current,
+                                text: event.target.value,
+                              }))
+                            }
+                            placeholder="Describe a subtask"
+                          />
+                          <button
+                            type="button"
+                            className="danger"
+                            onClick={() =>
+                              setDraft((current) => ({
+                                ...current,
+                                checklist: current.checklist.filter(
+                                  (entry) => entry.id !== item.id,
+                                ),
+                              }))
+                            }
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
 
               <div className="modal-actions">
-                <div className="nav-row">
+                <div className="modal-actions__group">
                   <button type="submit" className="primary">
                     Save
                   </button>
@@ -1357,7 +1492,7 @@ function App() {
                 </div>
 
                 {modal.eventId ? (
-                  <div className="nav-row">
+                  <div className="modal-actions__group">
                     <button
                       type="button"
                       onClick={() => handleDraftStatus("done")}

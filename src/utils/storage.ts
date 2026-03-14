@@ -26,8 +26,32 @@ function createId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+const LEGACY_PRIORITY_MAP: Record<string, PriorityLevel> = {
+  P1: "red",
+  P2: "yellow",
+  P3: "green",
+  P4: "white",
+};
+
 function isPriorityLevel(value: string): value is PriorityLevel {
-  return value === "P1" || value === "P2" || value === "P3" || value === "P4";
+  return (
+    value === "red" ||
+    value === "yellow" ||
+    value === "green" ||
+    value === "white"
+  );
+}
+
+function normalizePriority(value: unknown): PriorityLevel {
+  if (typeof value !== "string") {
+    return "green";
+  }
+
+  if (isPriorityLevel(value)) {
+    return value;
+  }
+
+  return LEGACY_PRIORITY_MAP[value] ?? "green";
 }
 
 function isTodoStatus(value: string): value is TodoStatus {
@@ -85,10 +109,7 @@ function normalizeEvent(event: unknown, index: number): TodoEvent {
     location: typeof raw.location === "string" ? raw.location : "",
     notes: typeof raw.notes === "string" ? raw.notes : "",
     status,
-    priority:
-      typeof raw.priority === "string" && isPriorityLevel(raw.priority)
-        ? raw.priority
-        : "P3",
+    priority: normalizePriority(raw.priority),
     checklist: Array.isArray(raw.checklist)
       ? raw.checklist.map(normalizeChecklistItem)
       : [],
@@ -142,7 +163,7 @@ export function createEmptyTodoEvent(date = getTodayKey()): TodoEvent {
     location: "",
     notes: "",
     status: "open",
-    priority: "P2",
+    priority: "green",
     checklist: [],
     top3Date: null,
     createdAt: timestamp,
@@ -154,10 +175,10 @@ export function createEmptyTodoEvent(date = getTodayKey()): TodoEvent {
 
 export function sortEvents(events: TodoEvent[]) {
   const priorityWeight: Record<PriorityLevel, number> = {
-    P1: 0,
-    P2: 1,
-    P3: 2,
-    P4: 3,
+    red: 0,
+    yellow: 1,
+    green: 2,
+    white: 3,
   };
 
   const statusWeight: Record<TodoStatus, number> = {
