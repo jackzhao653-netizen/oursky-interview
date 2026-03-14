@@ -1111,6 +1111,12 @@ function App() {
     setModal({ open: false, eventId: null });
   }
 
+  function closeSettingsModal() {
+    resetCategoryEditor();
+    resetKindEditor();
+    setIsSettingsOpen(false);
+  }
+
   function resetCategoryEditor() {
     setEditingCategory(null);
     setCategoryInput("");
@@ -2671,7 +2677,7 @@ function App() {
         <div
           className="modal-backdrop"
           role="presentation"
-          onClick={() => setIsSettingsOpen(false)}
+          onClick={closeSettingsModal}
         >
           <div
             className="modal panel"
@@ -2868,7 +2874,7 @@ function App() {
               <button
                 type="button"
                 className="primary"
-                onClick={() => setIsSettingsOpen(false)}
+                onClick={closeSettingsModal}
               >
                 Close
               </button>
