@@ -680,12 +680,45 @@ function App() {
         <div className="wrap page-stack">
           <section className="panel quick-add-panel">
             <div className="body quick-add-panel__body">
-              <div className="quick-add-panel__intro">
-                <p className="eyebrow">Quick capture</p>
-                <p className="quick-add-panel__title">
-                  Add a task without losing your place in the calendar.
-                </p>
-              </div>
+              <section className="quick-add-panel__top3" aria-label="Daily Top 3">
+                <div className="quick-add-panel__top3-header">
+                  <div>
+                    <p className="eyebrow">Daily Top 3</p>
+                    <p className="quick-add-panel__title">
+                      {top3Events.length === 0
+                        ? "Pin up to three open todos here to keep the day tight."
+                        : `${top3Events.length}/${TOP3_LIMIT} pinned for ${getShortDateLabel(todayKey)}.`}
+                    </p>
+                  </div>
+                  <span className="pill mono">{getShortDateLabel(todayKey)}</span>
+                </div>
+
+                <div className="quick-add-panel__top3-list">
+                  {top3Events.length === 0 ? (
+                    <p className="empty">
+                      Nothing pinned yet. Use the Top 3 toggle on a task card.
+                    </p>
+                  ) : (
+                    top3Events.map((event) => (
+                      <button
+                        key={event.id}
+                        type="button"
+                        className="top3-item"
+                        onClick={() => openEditModal(event)}
+                      >
+                        <span className="top3-item__title">{event.title}</span>
+                        <span className="top3-item__meta">
+                          <span>{event.priority}</span>
+                          <span>{event.course}</span>
+                          <span>
+                            {getRelativeDateLabel(event.date, todayKey)}
+                          </span>
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </section>
 
               <form className="quick-add" onSubmit={handleQuickAdd}>
                 <input
@@ -893,42 +926,8 @@ function App() {
 
               <section className="panel">
                 <h2>
-                  <span>Daily Top 3</span>
-                  <span className="pill mono">
-                    {getShortDateLabel(todayKey)}
-                  </span>
-                </h2>
-                <div className="body list">
-                  {top3Events.length === 0 ? (
-                    <p className="empty">
-                      Pin up to three open todos here to keep the day tight.
-                    </p>
-                  ) : (
-                    top3Events.map((event) => (
-                      <button
-                        key={event.id}
-                        type="button"
-                        className="top3-item"
-                        onClick={() => openEditModal(event)}
-                      >
-                        <span className="top3-item__title">{event.title}</span>
-                        <span className="top3-item__meta">
-                          <span>{event.priority}</span>
-                          <span>{event.course}</span>
-                          <span>
-                            {getRelativeDateLabel(event.date, todayKey)}
-                          </span>
-                        </span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </section>
-
-              <section className="panel">
-                <h2>
-                  <span>Selected Day</span>
-                  <span className="pill mono">{selectedDateKey}</span>
+                  <span>Day Snapshot</span>
+                  <span className="pill mono">{getShortDateLabel(selectedDateKey)}</span>
                 </h2>
                 <div className="body">
                   <p className="detail-title">{selectedDateLabel}</p>
@@ -993,7 +992,7 @@ function App() {
                 {notice ? <div className="notice">{notice}</div> : null}
 
                 {view === "day" ? (
-                  <div className="day-view">
+                  <div className="day-view calendar-view">
                     <div className="day-header">
                       <div>
                         <p className="eyebrow">Day agenda</p>
@@ -1004,7 +1003,7 @@ function App() {
                       </span>
                     </div>
 
-                    <div className="task-stack">
+                    <div className="task-stack calendar-scroll">
                       {selectedDateEvents.length === 0 ? (
                         <p className="empty">
                           No todos for this day with the current filters.
@@ -1028,47 +1027,49 @@ function App() {
                     </div>
                   </div>
                 ) : (
-                  <div className="week-grid">
-                    {weekDays.map((day) => {
-                      const dateKey = getTodayKey(day);
-                      const events = eventsByDate[dateKey] ?? [];
+                  <div className="week-view calendar-view">
+                    <div className="week-grid">
+                      {weekDays.map((day) => {
+                        const dateKey = getTodayKey(day);
+                        const events = eventsByDate[dateKey] ?? [];
 
-                      return (
-                        <section
-                          key={dateKey}
-                          className={`week-cell ${dateKey === todayKey ? "is-today" : ""} ${dateKey === selectedDateKey ? "is-selected" : ""}`}
-                        >
-                          <button
-                            type="button"
-                            className="week-cell__header"
-                            onClick={() => selectDate(dateKey, "day")}
+                        return (
+                          <section
+                            key={dateKey}
+                            className={`week-cell ${dateKey === todayKey ? "is-today" : ""} ${dateKey === selectedDateKey ? "is-selected" : ""}`}
                           >
-                            <div className="week-cell__header-copy">
-                              <span className="mono">{dateKey}</span>
-                              <strong>{getWeekdayLabel(dateKey)}</strong>
-                            </div>
-                            <span className="pill">
-                              {events.length} task
-                              {events.length === 1 ? "" : "s"}
-                            </span>
-                          </button>
+                            <button
+                              type="button"
+                              className="week-cell__header"
+                              onClick={() => selectDate(dateKey, "day")}
+                            >
+                              <div className="week-cell__header-copy">
+                                <span className="mono">{dateKey}</span>
+                                <strong>{getWeekdayLabel(dateKey)}</strong>
+                              </div>
+                              <span className="pill">
+                                {events.length} task
+                                {events.length === 1 ? "" : "s"}
+                              </span>
+                            </button>
 
-                          <div className="week-task-list">
-                            {events.length === 0 ? (
-                              <p className="empty">—</p>
-                            ) : (
-                              events.map((event) => (
-                                <WeekTodoButton
-                                  key={event.id}
-                                  event={event}
-                                  onSelect={() => selectDate(event.date, "day")}
-                                />
-                              ))
-                            )}
-                          </div>
-                        </section>
-                      );
-                    })}
+                            <div className="week-task-list calendar-scroll">
+                              {events.length === 0 ? (
+                                <p className="empty">—</p>
+                              ) : (
+                                events.map((event) => (
+                                  <WeekTodoButton
+                                    key={event.id}
+                                    event={event}
+                                    onSelect={() => selectDate(event.date, "day")}
+                                  />
+                                ))
+                              )}
+                            </div>
+                          </section>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>

@@ -59,6 +59,9 @@
   --overlay: rgba(0, 0, 0, 0.56);
   --radius: 18px;
   --radius2: 12px;
+  --calendar-min-height: clamp(40rem, 68vh, 52rem);
+  --day-scroll-max-height: clamp(26rem, 56vh, 44rem);
+  --week-scroll-max-height: clamp(15rem, 34vh, 26rem);
   --mono:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
     "Courier New", monospace;
@@ -203,7 +206,7 @@ option {
   grid-template-columns: 320px minmax(0, 1fr);
   gap: 14px;
   padding: 0 0 24px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .top {
@@ -292,9 +295,24 @@ option {
   gap: 14px;
 }
 
-.quick-add-panel__intro {
+.quick-add-panel__top3,
+.quick-add-panel__top3-list,
+.quick-add-panel__top3-header {
   display: grid;
-  gap: 4px;
+  gap: 10px;
+}
+
+.quick-add-panel__top3 {
+  min-width: 0;
+}
+
+.quick-add-panel__top3-header {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.quick-add-panel__top3-list {
+  align-content: start;
 }
 
 .quick-add-panel__title {
@@ -336,6 +354,7 @@ option {
 .task-stack,
 .mini-calendar,
 .day-view,
+.week-view,
 .checklist-editor__list,
 .modal-form,
 .week-task-list {
@@ -344,11 +363,30 @@ option {
 }
 
 .main-panel .body {
+  display: flex;
+  flex-direction: column;
   gap: 16px;
+  height: 100%;
+  min-height: 0;
 }
 
 .main-panel {
   min-width: 0;
+  min-height: var(--calendar-min-height);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.calendar-view {
+  min-height: calc(var(--calendar-min-height) - 7.5rem);
+  min-width: 0;
+}
+
+.calendar-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
 }
 
 .mini-calendar {
@@ -487,14 +525,32 @@ option {
   flex-wrap: wrap;
 }
 
+.day-view {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.day-view .calendar-scroll {
+  max-height: var(--day-scroll-max-height);
+  align-content: start;
+}
+
+.week-view {
+  min-width: 0;
+}
+
 .week-grid {
   display: grid;
   gap: 12px;
+  min-height: 100%;
+  align-items: stretch;
 }
 
 .week-cell {
   padding: 10px;
   min-width: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: start;
 }
 
 .week-cell.is-today,
@@ -536,6 +592,8 @@ option {
 
 .week-task-list {
   gap: 8px;
+  align-content: start;
+  max-height: var(--week-scroll-max-height);
 }
 
 .week-task {
@@ -774,15 +832,24 @@ label {
   padding: 20px;
   background: var(--overlay);
   backdrop-filter: blur(6px);
+  overflow: auto;
 }
 
 .modal {
-  width: min(760px, 100%);
+  width: min(760px, calc(100vw - 24px));
+  max-height: min(860px, calc(100vh - 24px));
   background: var(--panel-strong);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .modal-form {
   gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  align-content: start;
 }
 
 .modal-actions {
@@ -803,8 +870,8 @@ label {
 
 @media (min-width: 960px) {
   .quick-add-panel__body {
-    grid-template-columns: minmax(240px, 320px) 1fr;
-    align-items: end;
+    grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+    align-items: stretch;
   }
 }
 
@@ -814,7 +881,7 @@ label {
   }
 
   .week-cell {
-    min-height: 100%;
+    min-height: calc(var(--calendar-min-height) - 8rem);
   }
 }
 
