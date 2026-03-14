@@ -10,6 +10,8 @@ import type {
 import { getOccurrenceDatesInRange, getTodayKey } from "./date";
 
 export const STORAGE_KEY = "oursky-study-timetable-checklists";
+const PENDING_MUTATIONS_KEY = "oursky-study-timetable-pending-mutations";
+export const PERSISTENCE_NOTICE_EVENT = "oursky-persistence-notice";
 
 const EMPTY_FILE: TodoEventFile = {
   version: 1,
@@ -271,36 +273,54 @@ export function resolveEventsInRange(
   return sortEvents(resolvedEvents);
 }
 
-export async function loadEventFile() {
+type PendingMutation =
+  | {
+      type: "upsert";
+      eventId: string;
+      event: TodoEvent;
+      queuedAt: string;
+    }
+  | {
+      type: "delete";
+      eventId: string;
+      queuedAt: string;
+    };
+
+let lastLocalFile: TodoEventFile | null = null;
+let flushQueue = Promise.resolve();
+let syncListenerAttached = false;
+
+function emitPersistenceNotice(message: string) {
   if (typeof window === "undefined") {
-    return EMPTY_FILE;
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent<{ message: string }>(PERSISTENCE_NOTICE_EVENT, {
+      detail: { message },
+    }),
+  );
+}
+
+function readCachedFile() {
+  if (typeof window === "undefined") {
+    return null;
   }
 
   const cached = window.localStorage.getItem(STORAGE_KEY);
-  if (cached) {
-    try {
-      return normalizeFile(JSON.parse(cached));
-    } catch (error) {
-      console.error("Failed to parse local event cache", error);
-    }
+  if (!cached) {
+    return null;
   }
 
   try {
-    const response = await fetch("/events.json");
-    if (response.ok) {
-      const data = await response.json();
-      const file = normalizeFile(data);
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(file));
-      return file;
-    }
+    return normalizeFile(JSON.parse(cached));
   } catch (error) {
-    console.error("Failed to load seeded events.json", error);
+    console.error("Failed to parse local event cache", error);
+    return null;
   }
-
-  return EMPTY_FILE;
 }
 
-export function saveEventFile(file: TodoEventFile) {
+function writeCachedFile(file: TodoEventFile) {
   if (typeof window === "undefined") {
     return;
   }
@@ -313,10 +333,382 @@ export function saveEventFile(file: TodoEventFile) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 }
 
+function normalizePendingMutation(input: unknown): PendingMutation | null {
+  if (!input || typeof input !== "object") {
+    return null;
+  }
+
+  const raw = input as Partial<PendingMutation> & { event?: unknown };
+  if (typeof raw.eventId !== "string" || raw.eventId.length === 0) {
+    return null;
+  }
+
+  const queuedAt =
+    typeof raw.queuedAt === "string" && raw.queuedAt.length > 0
+      ? raw.queuedAt
+      : new Date().toISOString();
+
+  if (raw.type === "delete") {
+    return {
+      type: "delete",
+      eventId: raw.eventId,
+      queuedAt,
+    };
+  }
+
+  if (raw.type === "upsert") {
+    return {
+      type: "upsert",
+      eventId: raw.eventId,
+      event: normalizeEvent(raw.event, 0),
+      queuedAt,
+    };
+  }
+
+  return null;
+}
+
+function readPendingMutations() {
+  if (typeof window === "undefined") {
+    return [] as PendingMutation[];
+  }
+
+  const cached = window.localStorage.getItem(PENDING_MUTATIONS_KEY);
+  if (!cached) {
+    return [] as PendingMutation[];
+  }
+
+  try {
+    const parsed = JSON.parse(cached);
+    return Array.isArray(parsed)
+      ? parsed
+          .map(normalizePendingMutation)
+          .filter((mutation): mutation is PendingMutation => mutation !== null)
+      : [];
+  } catch (error) {
+    console.error("Failed to parse pending event mutations", error);
+    return [];
+  }
+}
+
+function writePendingMutations(mutations: PendingMutation[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (mutations.length === 0) {
+    window.localStorage.removeItem(PENDING_MUTATIONS_KEY);
+    return;
+  }
+
+  window.localStorage.setItem(
+    PENDING_MUTATIONS_KEY,
+    JSON.stringify(mutations),
+  );
+}
+
+function getEventFingerprint(event: TodoEvent) {
+  return JSON.stringify({
+    id: event.id,
+    title: event.title,
+    category: event.category,
+    activity: event.activity,
+    priority: event.priority,
+    recurrence: event.recurrence,
+    date: event.date,
+    start: event.start,
+    end: event.end,
+    location: event.location,
+    notes: event.notes,
+    status: event.status,
+    checklist: event.checklist.map((item) => ({
+      id: item.id,
+      text: item.text,
+      done: item.done,
+    })),
+    order: event.order,
+    top3Date: event.top3Date,
+    createdAt: event.createdAt,
+    updatedAt: event.updatedAt,
+    completedAt: event.completedAt,
+  });
+}
+
+function buildPendingMutations(
+  previousFile: TodoEventFile,
+  nextFile: TodoEventFile,
+) {
+  const previousById = new Map(previousFile.events.map((event) => [event.id, event]));
+  const nextById = new Map(nextFile.events.map((event) => [event.id, event]));
+  const mutations: PendingMutation[] = [];
+
+  nextFile.events.forEach((event) => {
+    const previousEvent = previousById.get(event.id);
+    if (
+      !previousEvent ||
+      getEventFingerprint(previousEvent) !== getEventFingerprint(event)
+    ) {
+      mutations.push({
+        type: "upsert",
+        eventId: event.id,
+        event,
+        queuedAt: new Date().toISOString(),
+      });
+    }
+  });
+
+  previousFile.events.forEach((event) => {
+    if (!nextById.has(event.id)) {
+      mutations.push({
+        type: "delete",
+        eventId: event.id,
+        queuedAt: new Date().toISOString(),
+      });
+    }
+  });
+
+  return mutations;
+}
+
+function compactPendingMutations(mutations: PendingMutation[]) {
+  const latestById = new Map<string, PendingMutation>();
+
+  mutations.forEach((mutation) => {
+    latestById.set(mutation.eventId, mutation);
+  });
+
+  const seenEventIds = new Set<string>();
+
+  return [...mutations]
+    .reverse()
+    .filter((mutation) => {
+      if (seenEventIds.has(mutation.eventId)) {
+        return false;
+      }
+
+      seenEventIds.add(mutation.eventId);
+      return true;
+    })
+    .reverse()
+    .map((mutation) => latestById.get(mutation.eventId) ?? mutation);
+}
+
+async function readRemoteEventFile() {
+  const response = await fetch("/api/todos", {
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch todos (${response.status})`);
+  }
+
+  return normalizeFile(await response.json());
+}
+
+async function readSeedEventFile() {
+  try {
+    const response = await fetch("/events.json", {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return EMPTY_FILE;
+    }
+
+    return normalizeFile(await response.json());
+  } catch (error) {
+    console.error("Failed to load seeded events.json", error);
+    return EMPTY_FILE;
+  }
+}
+
+async function sendMutation(mutation: PendingMutation) {
+  const endpoint = `/api/todos/${encodeURIComponent(mutation.eventId)}`;
+  const response =
+    mutation.type === "delete"
+      ? await fetch(endpoint, {
+          method: "DELETE",
+        })
+      : await fetch(endpoint, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify(mutation.event),
+        });
+
+  if (!response.ok) {
+    throw new Error(`Failed to sync todo ${mutation.eventId}`);
+  }
+}
+
+async function flushPendingMutationsInternal() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (navigator.onLine === false) {
+    emitPersistenceNotice("Offline mode active. Changes are saved locally.");
+    return;
+  }
+
+  const pending = readPendingMutations();
+  if (pending.length === 0) {
+    return;
+  }
+
+  for (const mutation of pending) {
+    await sendMutation(mutation);
+    const remaining = readPendingMutations().filter(
+      (queuedMutation) =>
+        !(
+          queuedMutation.eventId === mutation.eventId &&
+          queuedMutation.queuedAt === mutation.queuedAt &&
+          queuedMutation.type === mutation.type
+        ),
+    );
+    writePendingMutations(remaining);
+  }
+
+  emitPersistenceNotice("Database sync restored.");
+}
+
+function flushPendingMutations() {
+  flushQueue = flushQueue
+    .catch(() => undefined)
+    .then(async () => {
+      try {
+        await flushPendingMutationsInternal();
+      } catch (error) {
+        console.error("Failed to flush queued todo mutations", error);
+        emitPersistenceNotice("Database unavailable. Using local cache.");
+      }
+    });
+
+  return flushQueue;
+}
+
+export function startPersistenceSync() {
+  if (typeof window === "undefined") {
+    return () => undefined;
+  }
+
+  const handleOnline = () => {
+    void flushPendingMutations();
+  };
+
+  if (!syncListenerAttached) {
+    window.addEventListener("online", handleOnline);
+    syncListenerAttached = true;
+  }
+
+  void flushPendingMutations();
+
+  return () => {
+    if (!syncListenerAttached) {
+      return;
+    }
+
+    window.removeEventListener("online", handleOnline);
+    syncListenerAttached = false;
+  };
+}
+
+export async function loadEventFile() {
+  if (typeof window === "undefined") {
+    return EMPTY_FILE;
+  }
+
+  const cachedFile = readCachedFile();
+  const pendingMutations = readPendingMutations();
+
+  if (pendingMutations.length > 0 && cachedFile) {
+    lastLocalFile = cachedFile;
+    emitPersistenceNotice("Loaded local changes while waiting for database sync.");
+    void flushPendingMutations();
+    return cachedFile;
+  }
+
+  try {
+    const remoteFile = await readRemoteEventFile();
+
+    if (remoteFile.events.length === 0) {
+      if (cachedFile && cachedFile.events.length > 0) {
+        writeCachedFile(cachedFile);
+        lastLocalFile = EMPTY_FILE;
+        emitPersistenceNotice("Using local tasks and syncing them to the database.");
+        return cachedFile;
+      }
+
+      const seedFile = await readSeedEventFile();
+      if (seedFile.events.length > 0) {
+        writeCachedFile(seedFile);
+        lastLocalFile = EMPTY_FILE;
+        return seedFile;
+      }
+    }
+
+    writeCachedFile(remoteFile);
+    lastLocalFile = remoteFile;
+    return remoteFile;
+  } catch (error) {
+    console.error("Failed to load todos from API", error);
+
+    if (cachedFile) {
+      lastLocalFile = cachedFile;
+      emitPersistenceNotice("Database unavailable. Loaded local cache instead.");
+      void flushPendingMutations();
+      return cachedFile;
+    }
+  }
+
+  const seedFile = await readSeedEventFile();
+  if (seedFile.events.length > 0) {
+    writeCachedFile(seedFile);
+    lastLocalFile = EMPTY_FILE;
+    emitPersistenceNotice("Loaded starter tasks locally until the database is available.");
+    return seedFile;
+  }
+
+  lastLocalFile = EMPTY_FILE;
+  return EMPTY_FILE;
+}
+
+export async function saveEventFile(file: TodoEventFile) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const previousFile = lastLocalFile ?? readCachedFile() ?? EMPTY_FILE;
+  const payload = normalizeFile({
+    version: file.version,
+    events: sortEvents(file.events),
+  });
+
+  writeCachedFile(payload);
+  lastLocalFile = payload;
+
+  const nextMutations = buildPendingMutations(previousFile, payload);
+  if (nextMutations.length === 0) {
+    return;
+  }
+
+  writePendingMutations(
+    compactPendingMutations([...readPendingMutations(), ...nextMutations]),
+  );
+  await flushPendingMutations();
+}
+
 export function resetEventFileCache() {
   if (typeof window === "undefined") {
     return;
   }
 
   window.localStorage.removeItem(STORAGE_KEY);
+  window.localStorage.removeItem(PENDING_MUTATIONS_KEY);
+  lastLocalFile = EMPTY_FILE;
 }

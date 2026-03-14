@@ -40,8 +40,10 @@ import {
 import {
   createEmptyTodoEvent,
   loadEventFile,
+  PERSISTENCE_NOTICE_EVENT,
   resolveEventsInRange,
   saveEventFile,
+  startPersistenceSync,
   sortEvents,
 } from "./utils/storage";
 
@@ -241,22 +243,6 @@ function getNotesPreview(notes: string, limit = 90) {
   }
 
   return `${trimmed.slice(0, limit).trimEnd()}...`;
-}
-
-function getWeekTaskTooltip(event: TodoEvent) {
-  const tooltipLines = [
-    event.title,
-    `Date: ${getFullDateLabel(event.date)}`,
-    `Time: ${getTimeLabel(event)}`,
-    `Location: ${event.location || "No location"}`,
-  ];
-
-  const notesPreview = getNotesPreview(event.notes);
-  if (notesPreview) {
-    tooltipLines.push(`Notes: ${notesPreview}`);
-  }
-
-  return tooltipLines.join("\n");
 }
 
 function getDateKeyInMonth(year: number, monthIndex: number, dayOfMonth: number) {
@@ -526,11 +512,40 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const stopSync = startPersistenceSync();
+
+    return () => {
+      stopSync();
+    };
+  }, []);
+
+  useEffect(() => {
+    function handlePersistenceNotice(event: Event) {
+      const detail = (event as CustomEvent<{ message?: string }>).detail;
+      if (detail?.message) {
+        setNotice(detail.message);
+      }
+    }
+
+    window.addEventListener(
+      PERSISTENCE_NOTICE_EVENT,
+      handlePersistenceNotice as EventListener,
+    );
+
+    return () => {
+      window.removeEventListener(
+        PERSISTENCE_NOTICE_EVENT,
+        handlePersistenceNotice as EventListener,
+      );
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isReady) {
       return;
     }
 
-    saveEventFile(file);
+    void saveEventFile(file);
   }, [file, isReady]);
 
   useEffect(() => {
