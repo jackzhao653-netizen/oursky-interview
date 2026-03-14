@@ -56,8 +56,6 @@ type AppSettings = {
   defaultView: CalendarView;
   showCompletedTasks: boolean;
   dateFormat: SettingsDateFormat;
-  categoryLabel: string;
-  activityLabel: string;
 };
 
 type ModalState = {
@@ -112,8 +110,6 @@ const DEFAULT_SETTINGS: AppSettings = {
   defaultView: "week",
   showCompletedTasks: false,
   dateFormat: "long",
-  categoryLabel: "Category",
-  activityLabel: "Activity",
 };
 const MOBILE_TOOLTIP_BREAKPOINT = 720;
 const TOOLTIP_EDGE_PADDING = 16;
@@ -322,14 +318,6 @@ function loadStoredSettings(): AppSettings {
           ? parsed.showCompletedTasks
           : DEFAULT_SETTINGS.showCompletedTasks,
       dateFormat: parsed.dateFormat === "compact" ? "compact" : DEFAULT_SETTINGS.dateFormat,
-      categoryLabel:
-        typeof parsed.categoryLabel === "string" && parsed.categoryLabel.trim()
-          ? parsed.categoryLabel.trim()
-          : DEFAULT_SETTINGS.categoryLabel,
-      activityLabel:
-        typeof parsed.activityLabel === "string" && parsed.activityLabel.trim()
-          ? parsed.activityLabel.trim()
-          : DEFAULT_SETTINGS.activityLabel,
     };
   } catch (error) {
     console.error("Failed to parse stored settings", error);
@@ -1336,13 +1324,6 @@ function App() {
         <div className="wrap">
           <div className="top">
             <div className="brand">
-              <img
-                className="brand-logo"
-                src="/oursky-logo.svg"
-                alt="Oursky"
-                width="120"
-                height="26"
-              />
               <div>
                 <p className="eyebrow">Oursky checklist planner</p>
                 <h1>Oursky Planner</h1>
@@ -1975,7 +1956,7 @@ function App() {
                     />
                   </label>
                   <label>
-                    {settings.categoryLabel}
+                    Category
                     <select
                       value={draft.category}
                       onChange={(event) =>
@@ -2025,7 +2006,7 @@ function App() {
 
                 <div className="form-grid">
                   <label>
-                    {settings.activityLabel}
+                    Kind
                     <select
                       value={draft.activity}
                       onChange={(event) =>
@@ -2078,103 +2059,88 @@ function App() {
                   <div className="recurrence-options-wrapper">
                     <span>Recurrence Options</span>
                     <div className="recurrence-options">
-                      <label className={`recurrence-option ${(draft.recurrenceCount === null && draft.recurrenceEndDate === null) ? "is-selected" : ""}`}>
-                        <div className="recurrence-option__radio-row">
-                          <input
-                            type="radio"
-                            name="recurrence-mode"
-                            checked={draft.recurrenceCount === null && draft.recurrenceEndDate === null}
-                            onChange={() =>
-                              setDraft((current) => ({
+                      <label className="recurrence-option">
+                        <input
+                          type="radio"
+                          name="recurrence-mode"
+                          checked={draft.recurrenceCount === null && draft.recurrenceEndDate === null}
+                          onChange={() =>
+                            setDraft((current) => ({
+                              ...current,
+                              recurrenceCount: null,
+                              recurrenceEndDate: null,
+                            }))
+                          }
+                        />
+                        <span>Repeat forever</span>
+                      </label>
+                      <label className="recurrence-option">
+                        <input
+                          type="radio"
+                          name="recurrence-mode"
+                          checked={draft.recurrenceCount !== null}
+                          onChange={() =>
+                            setDraft((current) =>
+                              normalizeRecurrenceDraft({
+                                ...current,
+                                recurrenceCount: 5,
+                                recurrenceEndDate: null,
+                              }),
+                            )
+                          }
+                        />
+                        <span>Repeat</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="100"
+                          value={draft.recurrenceCount ?? 5}
+                          disabled={draft.recurrenceCount === null}
+                          onChange={(event) => {
+                            const count = Math.max(1, parseInt(event.target.value, 10) || 1);
+                            setDraft((current) =>
+                              normalizeRecurrenceDraft({
+                                ...current,
+                                recurrenceCount: count,
+                                recurrenceEndDate: null,
+                              }),
+                            );
+                          }}
+                          className="recurrence-input"
+                        />
+                        <span>times</span>
+                      </label>
+                      <label className="recurrence-option">
+                        <input
+                          type="radio"
+                          name="recurrence-mode"
+                          checked={draft.recurrenceEndDate !== null}
+                          onChange={() =>
+                            setDraft((current) =>
+                              normalizeRecurrenceDraft({
                                 ...current,
                                 recurrenceCount: null,
-                                recurrenceEndDate: null,
-                              }))
-                            }
-                          />
-                          <span>Repeat forever</span>
-                        </div>
-                      </label>
-                      <label className={`recurrence-option ${(draft.recurrenceCount !== null) ? "is-selected" : ""}`}>
-                        <div className="recurrence-option__radio-row">
-                          <input
-                            type="radio"
-                            name="recurrence-mode"
-                            checked={draft.recurrenceCount !== null}
-                            onChange={() =>
-                              setDraft((current) =>
-                                normalizeRecurrenceDraft({
-                                  ...current,
-                                  recurrenceCount: 5,
-                                  recurrenceEndDate: null,
-                                }),
-                              )
-                            }
-                          />
-                          <span>Repeat fixed times</span>
-                        </div>
-                        <div className="recurrence-option__controls">
-                          <label className="recurrence-field">
-                            <span>Repeat times</span>
-                            <input
-                              type="number"
-                              min="1"
-                              max="100"
-                              value={draft.recurrenceCount ?? 5}
-                              disabled={draft.recurrenceCount === null}
-                              onChange={(event) => {
-                                const count = Math.max(1, parseInt(event.target.value, 10) || 1);
-                                setDraft((current) =>
-                                  normalizeRecurrenceDraft({
-                                    ...current,
-                                    recurrenceCount: count,
-                                    recurrenceEndDate: null,
-                                  }),
-                                );
-                              }}
-                              className="recurrence-input"
-                            />
-                          </label>
-                        </div>
-                      </label>
-                      <label className={`recurrence-option ${(draft.recurrenceEndDate !== null) ? "is-selected" : ""}`}>
-                        <div className="recurrence-option__radio-row">
-                          <input
-                            type="radio"
-                            name="recurrence-mode"
-                            checked={draft.recurrenceEndDate !== null}
-                            onChange={() =>
-                              setDraft((current) =>
-                                normalizeRecurrenceDraft({
-                                  ...current,
-                                  recurrenceCount: null,
-                                  recurrenceEndDate: getTodayKey(addDays(fromDateKey(current.date), 30)),
-                                }),
-                              )
-                            }
-                          />
-                          <span>Repeat until date</span>
-                        </div>
-                        <div className="recurrence-option__controls">
-                          <label className="recurrence-field">
-                            <span>Repeat until</span>
-                            <input
-                              type="date"
-                              value={draft.recurrenceEndDate ?? ""}
-                              disabled={draft.recurrenceEndDate === null}
-                              onChange={(event) =>
-                                setDraft((current) =>
-                                  normalizeRecurrenceDraft({
-                                    ...current,
-                                    recurrenceCount: null,
-                                    recurrenceEndDate: event.target.value,
-                                  }),
-                                )
-                              }
-                              className="recurrence-input"
-                            />
-                          </label>
-                        </div>
+                                recurrenceEndDate: getTodayKey(addDays(fromDateKey(current.date), 30)),
+                              }),
+                            )
+                          }
+                        />
+                        <span>Repeat until</span>
+                        <input
+                          type="date"
+                          value={draft.recurrenceEndDate ?? ""}
+                          disabled={draft.recurrenceEndDate === null}
+                          onChange={(event) =>
+                            setDraft((current) =>
+                              normalizeRecurrenceDraft({
+                                ...current,
+                                recurrenceCount: null,
+                                recurrenceEndDate: event.target.value,
+                              }),
+                            )
+                          }
+                          className="recurrence-input"
+                        />
                       </label>
                     </div>
                   </div>
@@ -2505,41 +2471,6 @@ function App() {
                 </div>
                 <p className="empty">
                   Preview: {settings.dateFormat === "compact" ? getShortDateLabel(selectedDateKey) : getFullDateLabel(selectedDateKey)}
-                </p>
-              </div>
-
-              <div className="field-group">
-                <span>Custom field labels</span>
-                <div className="settings-label-grid">
-                  <label>
-                    {DEFAULT_SETTINGS.categoryLabel} label
-                    <input
-                      value={settings.categoryLabel}
-                      onChange={(event) =>
-                        setSettings((current) => ({
-                          ...current,
-                          categoryLabel: event.target.value || DEFAULT_SETTINGS.categoryLabel,
-                        }))
-                      }
-                      placeholder={DEFAULT_SETTINGS.categoryLabel}
-                    />
-                  </label>
-                  <label>
-                    {DEFAULT_SETTINGS.activityLabel} label
-                    <input
-                      value={settings.activityLabel}
-                      onChange={(event) =>
-                        setSettings((current) => ({
-                          ...current,
-                          activityLabel: event.target.value || DEFAULT_SETTINGS.activityLabel,
-                        }))
-                      }
-                      placeholder={DEFAULT_SETTINGS.activityLabel}
-                    />
-                  </label>
-                </div>
-                <p className="empty">
-                  Header fields update immediately and stay saved on this device.
                 </p>
               </div>
 
