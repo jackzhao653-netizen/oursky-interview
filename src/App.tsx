@@ -31,6 +31,8 @@ import {
   sortEvents,
 } from "./utils/storage";
 
+type ThemeMode = "dark" | "light";
+
 type ModalState = {
   open: boolean;
   eventId: string | null;
@@ -49,6 +51,8 @@ const DEFAULT_FILTERS: TodoFilters = {
   showCancelled: false,
   hiddenCourses: [],
 };
+
+const THEME_STORAGE_KEY = "oursky-todo-theme";
 
 const CATEGORY_META: Record<
   string,
@@ -101,6 +105,16 @@ function getTimeLabel(event: TodoEvent) {
   }
 
   return "All-day";
+}
+
+function loadStoredTheme(): ThemeMode {
+  if (typeof window === "undefined") {
+    return "dark";
+  }
+
+  return window.localStorage.getItem(THEME_STORAGE_KEY) === "light"
+    ? "light"
+    : "dark";
 }
 
 function createMiniMonthDays(monthDate: Date) {
@@ -263,10 +277,37 @@ function TodoCard({
   );
 }
 
+type WeekTodoButtonProps = {
+  event: TodoEvent;
+  onSelect: () => void;
+};
+
+function WeekTodoButton({ event, onSelect }: WeekTodoButtonProps) {
+  const categoryMeta = getCategoryMeta(event.course);
+
+  return (
+    <button
+      type="button"
+      className={`week-task ${event.status !== "open" ? "is-muted" : ""}`}
+      style={
+        {
+          "--event-accent": categoryMeta.accent,
+          "--event-soft": categoryMeta.soft,
+        } as CSSProperties
+      }
+      onClick={onSelect}
+      title={event.title}
+    >
+      <span className="week-task__title">{event.title}</span>
+    </button>
+  );
+}
+
 function App() {
   const todayKey = getTodayKey();
   const [file, setFile] = useState<TodoEventFile>({ version: 1, events: [] });
   const [isReady, setIsReady] = useState(false);
+  const [theme, setTheme] = useState<ThemeMode>(() => loadStoredTheme());
   const [view, setView] = useState<"day" | "week">("week");
   const [cursorDate, setCursorDate] = useState(() => fromDateKey(todayKey));
   const [selectedDateKey, setSelectedDateKey] = useState(todayKey);
@@ -315,6 +356,12 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [notice]);
 
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
   const courseOptions = Array.from(
     new Set([...CATEGORY_OPTIONS, ...file.events.map((event) => event.course)]),
   );
@@ -360,6 +407,18 @@ function App() {
       version: current.version,
       events: sortEvents(updater(current.events)),
     }));
+  }
+
+  function selectDate(dateKey: string, nextView?: "day" | "week") {
+    const nextDate = fromDateKey(dateKey);
+    setSelectedDateKey(dateKey);
+    setCursorDate(nextDate);
+    setMiniMonthDate(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1));
+    setQuickAdd((current) => ({ ...current, date: dateKey }));
+
+    if (nextView) {
+      setView(nextView);
+    }
   }
 
   function openNewModal(dateKey = selectedDateKey) {
@@ -451,10 +510,7 @@ function App() {
       );
     });
 
-    setSelectedDateKey(nextEvent.date);
-    setCursorDate(fromDateKey(nextEvent.date));
-    setMiniMonthDate(new Date(fromDateKey(nextEvent.date)));
-    setQuickAdd((current) => ({ ...current, date: nextEvent.date }));
+    selectDate(nextEvent.date);
     closeModal();
   }
 
@@ -474,9 +530,7 @@ function App() {
 
     applyEvents((events) => [...events, nextEvent]);
     setQuickAdd((current) => ({ ...current, title: "" }));
-    setSelectedDateKey(quickAdd.date);
-    setCursorDate(fromDateKey(quickAdd.date));
-    setMiniMonthDate(new Date(fromDateKey(quickAdd.date)));
+    selectDate(quickAdd.date);
   }
 
   function handleToggleTodo(eventId: string) {
@@ -579,13 +633,7 @@ function App() {
   }
 
   function jumpToToday() {
-    const todayDate = fromDateKey(todayKey);
-    setCursorDate(todayDate);
-    setSelectedDateKey(todayKey);
-    setMiniMonthDate(
-      new Date(todayDate.getFullYear(), todayDate.getMonth(), 1),
-    );
-    setQuickAdd((current) => ({ ...current, date: todayKey }));
+    selectDate(todayKey);
   }
 
   return (
@@ -596,20 +644,26 @@ function App() {
             <div className="brand">
               <div>
                 <p className="eyebrow">Oursky checklist planner</p>
-                <h1>
-                  Calendar-first task control with daily execution built in.
-                </h1>
+                <h1>Oursky Planner</h1>
               </div>
-              <div className="brand-copy">
-                Day and week planning, checklist-heavy todos, and a focused Top
-                3 without leaving the timetable.
-              </div>
+              <p className="brand-copy">
+                Calendar-first task control with focused daily execution.
+              </p>
             </div>
 
             <div className="header-pills">
               <span className="pill">{openCount} open</span>
               <span className="pill">{doneCount} done</span>
               <span className="pill">{overdueCount} overdue</span>
+              <button
+                type="button"
+                className="theme-toggle"
+                onClick={() =>
+                  setTheme((current) => (current === "dark" ? "light" : "dark"))
+                }
+              >
+                {theme === "dark" ? "Light mode" : "Dark mode"}
+              </button>
               <button
                 type="button"
                 className="primary"
@@ -619,403 +673,408 @@ function App() {
               </button>
             </div>
           </div>
-
-          <form className="quick-add" onSubmit={handleQuickAdd}>
-            <input
-              value={quickAdd.title}
-              onChange={(event) =>
-                setQuickAdd((current) => ({
-                  ...current,
-                  title: event.target.value,
-                }))
-              }
-              placeholder="Quick add a todo for the calendar"
-              aria-label="Quick add title"
-            />
-            <input
-              type="date"
-              value={quickAdd.date}
-              onChange={(event) =>
-                setQuickAdd((current) => ({
-                  ...current,
-                  date: event.target.value,
-                }))
-              }
-              aria-label="Quick add due date"
-            />
-            <select
-              value={quickAdd.course}
-              onChange={(event) =>
-                setQuickAdd((current) => ({
-                  ...current,
-                  course: event.target.value,
-                }))
-              }
-              aria-label="Quick add category"
-            >
-              {courseOptions.map((course) => (
-                <option key={course} value={course}>
-                  {course}
-                </option>
-              ))}
-            </select>
-            <select
-              value={quickAdd.priority}
-              onChange={(event) =>
-                setQuickAdd((current) => ({
-                  ...current,
-                  priority: event.target.value as PriorityLevel,
-                }))
-              }
-              aria-label="Quick add priority"
-            >
-              {PRIORITY_LEVELS.map((priority) => (
-                <option key={priority} value={priority}>
-                  {priority}
-                </option>
-              ))}
-            </select>
-            <button type="submit" className="primary">
-              Add
-            </button>
-          </form>
         </div>
       </header>
 
-      <main className="wrap app-shell">
-        <aside className="sidebar">
-          <section className="panel">
-            <h2>
-              <span>Calendars</span>
-              <span className="pill">Filters</span>
-            </h2>
-            <div className="body">
-              <div className="nav-row">
-                <button
-                  type="button"
-                  onClick={() => setMiniMonthDate(addMonths(miniMonthDate, -1))}
-                >
-                  ◀
-                </button>
-                <span className="pill mono">
-                  {getMonthLabel(miniMonthDate)}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setMiniMonthDate(addMonths(miniMonthDate, 1))}
-                >
-                  ▶
-                </button>
+      <main className="main-content">
+        <div className="wrap page-stack">
+          <section className="panel quick-add-panel">
+            <div className="body quick-add-panel__body">
+              <div className="quick-add-panel__intro">
+                <p className="eyebrow">Quick capture</p>
+                <p className="quick-add-panel__title">
+                  Add a task without losing your place in the calendar.
+                </p>
               </div>
 
-              <div className="mini-calendar">
-                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
-                  (label) => (
-                    <div key={label} className="dow">
-                      {label}
-                    </div>
-                  ),
-                )}
+              <form className="quick-add" onSubmit={handleQuickAdd}>
+                <input
+                  value={quickAdd.title}
+                  onChange={(event) =>
+                    setQuickAdd((current) => ({
+                      ...current,
+                      title: event.target.value,
+                    }))
+                  }
+                  placeholder="Quick add a todo for the calendar"
+                  aria-label="Quick add title"
+                />
+                <input
+                  type="date"
+                  value={quickAdd.date}
+                  onChange={(event) =>
+                    setQuickAdd((current) => ({
+                      ...current,
+                      date: event.target.value,
+                    }))
+                  }
+                  aria-label="Quick add due date"
+                />
+                <select
+                  value={quickAdd.course}
+                  onChange={(event) =>
+                    setQuickAdd((current) => ({
+                      ...current,
+                      course: event.target.value,
+                    }))
+                  }
+                  aria-label="Quick add category"
+                >
+                  {courseOptions.map((course) => (
+                    <option key={course} value={course}>
+                      {course}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={quickAdd.priority}
+                  onChange={(event) =>
+                    setQuickAdd((current) => ({
+                      ...current,
+                      priority: event.target.value as PriorityLevel,
+                    }))
+                  }
+                  aria-label="Quick add priority"
+                >
+                  {PRIORITY_LEVELS.map((priority) => (
+                    <option key={priority} value={priority}>
+                      {priority}
+                    </option>
+                  ))}
+                </select>
+                <button type="submit" className="primary">
+                  Add
+                </button>
+              </form>
+            </div>
+          </section>
 
-                {miniMonthDays.map((day) => {
-                  const dateKey = getTodayKey(day);
-                  const count = eventsByDate[dateKey]?.length ?? 0;
-                  const isCurrentMonth =
-                    day.getMonth() === miniMonthDate.getMonth();
-                  const isToday = dateKey === todayKey;
-                  const isSelected = dateKey === selectedDateKey;
-
-                  return (
+          <div className="app-shell">
+            <aside className="sidebar">
+              <section className="panel">
+                <h2>
+                  <span>Calendars</span>
+                  <span className="pill">Filters</span>
+                </h2>
+                <div className="body">
+                  <div className="nav-row">
                     <button
-                      key={dateKey}
                       type="button"
-                      className={`mini-day ${isCurrentMonth ? "" : "is-outside"} ${isToday ? "is-today" : ""} ${isSelected ? "is-selected" : ""}`}
-                      onClick={() => {
-                        setSelectedDateKey(dateKey);
-                        setCursorDate(fromDateKey(dateKey));
-                        setMiniMonthDate(
-                          new Date(day.getFullYear(), day.getMonth(), 1),
-                        );
-                        setQuickAdd((current) => ({
-                          ...current,
-                          date: dateKey,
-                        }));
-                      }}
+                      onClick={() =>
+                        setMiniMonthDate(addMonths(miniMonthDate, -1))
+                      }
                     >
-                      <span>{day.getDate()}</span>
-                      {count > 0 ? <em>{count}</em> : null}
+                      ◀
                     </button>
-                  );
-                })}
-              </div>
+                    <span className="pill mono">
+                      {getMonthLabel(miniMonthDate)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setMiniMonthDate(addMonths(miniMonthDate, 1))
+                      }
+                    >
+                      ▶
+                    </button>
+                  </div>
 
-              <div className="sidebar-group">
-                <div className="sidebar-label">Show</div>
-                <label className="toggle-row">
-                  <input
-                    type="checkbox"
-                    checked={filters.showOpen}
-                    onChange={(event) =>
-                      setFilters((current) => ({
-                        ...current,
-                        showOpen: event.target.checked,
-                      }))
-                    }
-                  />
-                  <span>Open</span>
-                </label>
-                <label className="toggle-row">
-                  <input
-                    type="checkbox"
-                    checked={filters.showDone}
-                    onChange={(event) =>
-                      setFilters((current) => ({
-                        ...current,
-                        showDone: event.target.checked,
-                      }))
-                    }
-                  />
-                  <span>Done</span>
-                </label>
-                <label className="toggle-row">
-                  <input
-                    type="checkbox"
-                    checked={filters.showCancelled}
-                    onChange={(event) =>
-                      setFilters((current) => ({
-                        ...current,
-                        showCancelled: event.target.checked,
-                      }))
-                    }
-                  />
-                  <span>Cancelled</span>
-                </label>
-              </div>
+                  <div className="mini-calendar">
+                    {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
+                      (label) => (
+                        <div key={label} className="dow">
+                          {label}
+                        </div>
+                      ),
+                    )}
 
-              <div className="sidebar-group">
-                <div className="sidebar-label">Categories</div>
-                {courseOptions.map((course) => {
-                  const categoryMeta = getCategoryMeta(course);
-                  const checked = !filters.hiddenCourses.includes(course);
+                    {miniMonthDays.map((day) => {
+                      const dateKey = getTodayKey(day);
+                      const count = eventsByDate[dateKey]?.length ?? 0;
+                      const isCurrentMonth =
+                        day.getMonth() === miniMonthDate.getMonth();
+                      const isToday = dateKey === todayKey;
+                      const isSelected = dateKey === selectedDateKey;
 
-                  return (
-                    <label key={course} className="toggle-row">
+                      return (
+                        <button
+                          key={dateKey}
+                          type="button"
+                          className={`mini-day ${isCurrentMonth ? "" : "is-outside"} ${isToday ? "is-today" : ""} ${isSelected ? "is-selected" : ""}`}
+                          onClick={() => selectDate(dateKey)}
+                        >
+                          <span>{day.getDate()}</span>
+                          {count > 0 ? <em>{count}</em> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="sidebar-group">
+                    <div className="sidebar-label">Show</div>
+                    <label className="toggle-row">
                       <input
                         type="checkbox"
-                        checked={checked}
+                        checked={filters.showOpen}
                         onChange={(event) =>
                           setFilters((current) => ({
                             ...current,
-                            hiddenCourses: event.target.checked
-                              ? current.hiddenCourses.filter(
-                                  (value) => value !== course,
-                                )
-                              : [...current.hiddenCourses, course],
+                            showOpen: event.target.checked,
                           }))
                         }
                       />
-                      <span
-                        className="pill"
-                        style={{
-                          borderColor: categoryMeta.border,
-                          background: categoryMeta.soft,
-                        }}
-                      >
-                        {course}
-                      </span>
+                      <span>Open</span>
                     </label>
-                  );
-                })}
-              </div>
-            </div>
-          </section>
-
-          <section className="panel">
-            <h2>
-              <span>Daily Top 3</span>
-              <span className="pill mono">{getShortDateLabel(todayKey)}</span>
-            </h2>
-            <div className="body list">
-              {top3Events.length === 0 ? (
-                <p className="empty">
-                  Pin up to three open todos here to keep the day tight.
-                </p>
-              ) : (
-                top3Events.map((event) => (
-                  <button
-                    key={event.id}
-                    type="button"
-                    className="top3-item"
-                    onClick={() => openEditModal(event)}
-                  >
-                    <span className="top3-item__title">{event.title}</span>
-                    <span className="top3-item__meta">
-                      <span>{event.priority}</span>
-                      <span>{event.course}</span>
-                      <span>{getRelativeDateLabel(event.date, todayKey)}</span>
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
-          </section>
-
-          <section className="panel">
-            <h2>
-              <span>Selected Day</span>
-              <span className="pill mono">{selectedDateKey}</span>
-            </h2>
-            <div className="body">
-              <p className="detail-title">{selectedDateLabel}</p>
-              <p className="detail-copy">
-                {selectedDateEvents.length > 0
-                  ? `${selectedDateEvents.length} todo${selectedDateEvents.length === 1 ? "" : "s"} on deck.`
-                  : "No visible todos scheduled."}
-              </p>
-              <p className="detail-copy">
-                {todayEvents.length} open for today. {top3Events.length}/
-                {TOP3_LIMIT} pinned into focus.
-              </p>
-            </div>
-          </section>
-        </aside>
-
-        <section className="panel main-panel">
-          <h2>
-            <span>{view === "day" ? "Day" : "Week"}</span>
-            <span className="pill mono">{mainLabel}</span>
-          </h2>
-
-          <div className="body">
-            <div className="view-toolbar">
-              <div className="nav-row">
-                <button type="button" onClick={() => changeCursor(-1)}>
-                  Prev
-                </button>
-                <button type="button" onClick={jumpToToday}>
-                  Today
-                </button>
-                <button type="button" onClick={() => changeCursor(1)}>
-                  Next
-                </button>
-              </div>
-
-              <div className="nav-row">
-                <button
-                  type="button"
-                  className={view === "day" ? "primary" : ""}
-                  onClick={() => setView("day")}
-                >
-                  Day
-                </button>
-                <button
-                  type="button"
-                  className={view === "week" ? "primary" : ""}
-                  onClick={() => setView("week")}
-                >
-                  Week
-                </button>
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => openNewModal()}
-                >
-                  Add Todo
-                </button>
-              </div>
-            </div>
-
-            {notice ? <div className="notice">{notice}</div> : null}
-
-            {view === "day" ? (
-              <div className="day-view">
-                <div className="day-header">
-                  <div>
-                    <p className="eyebrow">Day agenda</p>
-                    <h3>{selectedDateLabel}</h3>
+                    <label className="toggle-row">
+                      <input
+                        type="checkbox"
+                        checked={filters.showDone}
+                        onChange={(event) =>
+                          setFilters((current) => ({
+                            ...current,
+                            showDone: event.target.checked,
+                          }))
+                        }
+                      />
+                      <span>Done</span>
+                    </label>
+                    <label className="toggle-row">
+                      <input
+                        type="checkbox"
+                        checked={filters.showCancelled}
+                        onChange={(event) =>
+                          setFilters((current) => ({
+                            ...current,
+                            showCancelled: event.target.checked,
+                          }))
+                        }
+                      />
+                      <span>Cancelled</span>
+                    </label>
                   </div>
-                  <span className="pill">
-                    {selectedDateEvents.length} items
-                  </span>
-                </div>
 
-                <div className="task-stack">
-                  {selectedDateEvents.length === 0 ? (
+                  <div className="sidebar-group">
+                    <div className="sidebar-label">Categories</div>
+                    {courseOptions.map((course) => {
+                      const categoryMeta = getCategoryMeta(course);
+                      const checked = !filters.hiddenCourses.includes(course);
+
+                      return (
+                        <label key={course} className="toggle-row">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) =>
+                              setFilters((current) => ({
+                                ...current,
+                                hiddenCourses: event.target.checked
+                                  ? current.hiddenCourses.filter(
+                                      (value) => value !== course,
+                                    )
+                                  : [...current.hiddenCourses, course],
+                              }))
+                            }
+                          />
+                          <span
+                            className="pill"
+                            style={{
+                              borderColor: categoryMeta.border,
+                              background: categoryMeta.soft,
+                            }}
+                          >
+                            {course}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              </section>
+
+              <section className="panel">
+                <h2>
+                  <span>Daily Top 3</span>
+                  <span className="pill mono">
+                    {getShortDateLabel(todayKey)}
+                  </span>
+                </h2>
+                <div className="body list">
+                  {top3Events.length === 0 ? (
                     <p className="empty">
-                      No todos for this day with the current filters.
+                      Pin up to three open todos here to keep the day tight.
                     </p>
                   ) : (
-                    selectedDateEvents.map((event) => (
-                      <TodoCard
+                    top3Events.map((event) => (
+                      <button
                         key={event.id}
-                        event={event}
-                        todayKey={todayKey}
-                        isSelected={modal.eventId === event.id}
-                        onOpen={() => openEditModal(event)}
-                        onToggleTodo={() => handleToggleTodo(event.id)}
-                        onToggleChecklistItem={(itemId) =>
-                          handleToggleChecklistItem(event.id, itemId)
-                        }
-                        onToggleTop3={() => handleToggleTop3(event.id)}
-                      />
+                        type="button"
+                        className="top3-item"
+                        onClick={() => openEditModal(event)}
+                      >
+                        <span className="top3-item__title">{event.title}</span>
+                        <span className="top3-item__meta">
+                          <span>{event.priority}</span>
+                          <span>{event.course}</span>
+                          <span>
+                            {getRelativeDateLabel(event.date, todayKey)}
+                          </span>
+                        </span>
+                      </button>
                     ))
                   )}
                 </div>
-              </div>
-            ) : (
-              <div className="week-grid">
-                {weekDays.map((day) => {
-                  const dateKey = getTodayKey(day);
-                  const events = eventsByDate[dateKey] ?? [];
+              </section>
 
-                  return (
-                    <section
-                      key={dateKey}
-                      className={`week-cell ${dateKey === todayKey ? "is-today" : ""} ${dateKey === selectedDateKey ? "is-selected" : ""}`}
+              <section className="panel">
+                <h2>
+                  <span>Selected Day</span>
+                  <span className="pill mono">{selectedDateKey}</span>
+                </h2>
+                <div className="body">
+                  <p className="detail-title">{selectedDateLabel}</p>
+                  <p className="detail-copy">
+                    {selectedDateEvents.length > 0
+                      ? `${selectedDateEvents.length} todo${selectedDateEvents.length === 1 ? "" : "s"} on deck.`
+                      : "No visible todos scheduled."}
+                  </p>
+                  <p className="detail-copy">
+                    {todayEvents.length} open for today. {top3Events.length}/
+                    {TOP3_LIMIT} pinned into focus.
+                  </p>
+                </div>
+              </section>
+            </aside>
+
+            <section className="panel main-panel">
+              <h2>
+                <span>{view === "day" ? "Day" : "Week"}</span>
+                <span className="pill mono">{mainLabel}</span>
+              </h2>
+
+              <div className="body">
+                <div className="view-toolbar">
+                  <div className="nav-row">
+                    <button type="button" onClick={() => changeCursor(-1)}>
+                      Prev
+                    </button>
+                    <button type="button" onClick={jumpToToday}>
+                      Today
+                    </button>
+                    <button type="button" onClick={() => changeCursor(1)}>
+                      Next
+                    </button>
+                  </div>
+
+                  <div className="nav-row">
+                    <button
+                      type="button"
+                      className={view === "day" ? "primary" : ""}
+                      onClick={() => setView("day")}
                     >
-                      <button
-                        type="button"
-                        className="week-cell__header"
-                        onClick={() => {
-                          setSelectedDateKey(dateKey);
-                          setCursorDate(fromDateKey(dateKey));
-                          setQuickAdd((current) => ({
-                            ...current,
-                            date: dateKey,
-                          }));
-                        }}
-                      >
-                        <span className="mono">{dateKey}</span>
-                        <span>{getWeekdayLabel(dateKey)}</span>
-                      </button>
+                      Day
+                    </button>
+                    <button
+                      type="button"
+                      className={view === "week" ? "primary" : ""}
+                      onClick={() => setView("week")}
+                    >
+                      Week
+                    </button>
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={() => openNewModal()}
+                    >
+                      Add Todo
+                    </button>
+                  </div>
+                </div>
 
-                      <div className="task-stack">
-                        {events.length === 0 ? (
-                          <p className="empty">—</p>
-                        ) : (
-                          events.map((event) => (
-                            <TodoCard
-                              key={event.id}
-                              event={event}
-                              todayKey={todayKey}
-                              isSelected={modal.eventId === event.id}
-                              onOpen={() => openEditModal(event)}
-                              onToggleTodo={() => handleToggleTodo(event.id)}
-                              onToggleChecklistItem={(itemId) =>
-                                handleToggleChecklistItem(event.id, itemId)
-                              }
-                              onToggleTop3={() => handleToggleTop3(event.id)}
-                            />
-                          ))
-                        )}
+                {notice ? <div className="notice">{notice}</div> : null}
+
+                {view === "day" ? (
+                  <div className="day-view">
+                    <div className="day-header">
+                      <div>
+                        <p className="eyebrow">Day agenda</p>
+                        <h3>{selectedDateLabel}</h3>
                       </div>
-                    </section>
-                  );
-                })}
+                      <span className="pill">
+                        {selectedDateEvents.length} items
+                      </span>
+                    </div>
+
+                    <div className="task-stack">
+                      {selectedDateEvents.length === 0 ? (
+                        <p className="empty">
+                          No todos for this day with the current filters.
+                        </p>
+                      ) : (
+                        selectedDateEvents.map((event) => (
+                          <TodoCard
+                            key={event.id}
+                            event={event}
+                            todayKey={todayKey}
+                            isSelected={modal.eventId === event.id}
+                            onOpen={() => openEditModal(event)}
+                            onToggleTodo={() => handleToggleTodo(event.id)}
+                            onToggleChecklistItem={(itemId) =>
+                              handleToggleChecklistItem(event.id, itemId)
+                            }
+                            onToggleTop3={() => handleToggleTop3(event.id)}
+                          />
+                        ))
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="week-grid">
+                    {weekDays.map((day) => {
+                      const dateKey = getTodayKey(day);
+                      const events = eventsByDate[dateKey] ?? [];
+
+                      return (
+                        <section
+                          key={dateKey}
+                          className={`week-cell ${dateKey === todayKey ? "is-today" : ""} ${dateKey === selectedDateKey ? "is-selected" : ""}`}
+                        >
+                          <button
+                            type="button"
+                            className="week-cell__header"
+                            onClick={() => selectDate(dateKey, "day")}
+                          >
+                            <div className="week-cell__header-copy">
+                              <span className="mono">{dateKey}</span>
+                              <strong>{getWeekdayLabel(dateKey)}</strong>
+                            </div>
+                            <span className="pill">
+                              {events.length} task
+                              {events.length === 1 ? "" : "s"}
+                            </span>
+                          </button>
+
+                          <div className="week-task-list">
+                            {events.length === 0 ? (
+                              <p className="empty">—</p>
+                            ) : (
+                              events.map((event) => (
+                                <WeekTodoButton
+                                  key={event.id}
+                                  event={event}
+                                  onSelect={() => selectDate(event.date, "day")}
+                                />
+                              ))
+                            )}
+                          </div>
+                        </section>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            )}
+            </section>
           </div>
-        </section>
+        </div>
       </main>
 
       {modal.open ? (
