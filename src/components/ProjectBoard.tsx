@@ -1,7 +1,8 @@
 import { TaskCard } from './TaskCard'
-import type { Label, Section, Todo } from '../types/todo'
+import type { Label, Project, Section, Todo } from '../types/todo'
 
 type ProjectBoardProps = {
+  project: Project | null
   sections: Section[]
   tasks: Todo[]
   labels: Label[]
@@ -13,6 +14,7 @@ type ProjectBoardProps = {
 }
 
 export function ProjectBoard({
+  project,
   sections,
   tasks,
   labels,
@@ -24,9 +26,17 @@ export function ProjectBoard({
 }: ProjectBoardProps) {
   return (
     <section className="space-y-5">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">Sections</p>
-        <h2 className="mt-2 font-serif text-3xl font-semibold text-slate-950">Work organized by flow</h2>
+      <div className="rounded-[32px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated)] p-5 shadow-[var(--shadow-panel)] backdrop-blur sm:p-6">
+        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[var(--accent-strong)]">
+          Project workflow
+        </p>
+        <h2 className="font-display mt-3 text-3xl leading-none text-[var(--text-primary)] sm:text-4xl">
+          {project ? `${project.name} workflow board` : 'Workflow board'}
+        </h2>
+        <p className="mt-3 max-w-3xl text-sm text-[var(--text-muted)] sm:text-base">
+          Each task is grouped by its workflow stage so it is obvious what is waiting, what is active,
+          and what is finished.
+        </p>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-3">
@@ -34,21 +44,26 @@ export function ProjectBoard({
           const sectionTasks = tasks.filter((task) => task.sectionId === section.id)
 
           return (
-            <div key={section.id} className="rounded-[30px] border border-slate-200 bg-white/80 p-4 shadow-[0_22px_50px_-40px_rgba(15,23,42,0.6)] backdrop-blur">
-              <div className="flex items-center justify-between">
+            <div
+              key={section.id}
+              className="rounded-[30px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated)] p-4 shadow-[var(--shadow-soft)] backdrop-blur"
+            >
+              <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-lg font-semibold text-slate-900">{section.name}</h3>
-                  <p className="mt-1 text-sm text-slate-500">{sectionTasks.length} tasks</p>
+                  <h3 className="text-lg font-semibold text-[var(--text-primary)]">{section.name}</h3>
+                  <p className="mt-1 text-sm text-[var(--text-muted)]">
+                    {sectionTasks.length} {sectionTasks.length === 1 ? 'task' : 'tasks'}
+                  </p>
                 </div>
-                <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                <div className="rounded-full bg-[var(--bg-muted)] px-3 py-1 text-xs font-semibold text-[var(--text-secondary)]">
                   {sectionTasks.length}
                 </div>
               </div>
 
               <div className="mt-4 space-y-3">
                 {sectionTasks.length === 0 ? (
-                  <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
-                    No tasks in {section.name.toLowerCase()} yet.
+                  <div className="rounded-[24px] border border-dashed border-[color:var(--border-soft)] bg-[var(--bg-inset)] px-4 py-5 text-sm text-[var(--text-muted)]">
+                    No tasks are currently in {section.name.toLowerCase()}.
                   </div>
                 ) : (
                   sectionTasks.map((task) => (

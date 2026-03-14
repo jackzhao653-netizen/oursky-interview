@@ -43,11 +43,16 @@ export function TaskInspector({
 }: TaskInspectorProps) {
   if (!task) {
     return (
-      <aside className="rounded-[30px] border border-slate-200 bg-white/85 p-5 shadow-[0_22px_50px_-40px_rgba(15,23,42,0.6)]">
-        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">Inspector</p>
-        <h2 className="mt-2 font-serif text-2xl font-semibold text-slate-950">Select a task</h2>
-        <p className="mt-3 text-sm text-slate-500">
-          Use Inspect on any task card to edit priority, section, and due date details.
+      <aside className="rounded-[30px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated)] p-5 shadow-[var(--shadow-soft)] backdrop-blur">
+        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[var(--accent-strong)]">
+          Task details
+        </p>
+        <h2 className="font-display mt-3 text-3xl leading-none text-[var(--text-primary)]">
+          Select a task to edit its details
+        </h2>
+        <p className="mt-3 text-sm text-[var(--text-muted)]">
+          Use the &quot;Edit details&quot; button on any task card to update its project, workflow stage,
+          due date, or labels.
         </p>
       </aside>
     )
@@ -56,16 +61,20 @@ export function TaskInspector({
   const projectSections = sections.filter((section) => section.projectId === task.projectId)
 
   return (
-    <aside className="rounded-[30px] border border-slate-200 bg-white/85 p-5 shadow-[0_22px_50px_-40px_rgba(15,23,42,0.6)]">
+    <aside className="rounded-[30px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated)] p-5 shadow-[var(--shadow-soft)] backdrop-blur">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">Inspector</p>
-          <h2 className="mt-2 font-serif text-2xl font-semibold text-slate-950">Task details</h2>
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[var(--accent-strong)]">
+            Task details
+          </p>
+          <h2 className="font-display mt-3 text-3xl leading-none text-[var(--text-primary)]">
+            Edit the selected task
+          </h2>
         </div>
         <button
           type="button"
           onClick={() => onSelectTask(null)}
-          className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-600"
+          className="rounded-full bg-[var(--bg-muted)] px-3 py-1.5 text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-muted-strong)]"
         >
           Close
         </button>
@@ -73,39 +82,31 @@ export function TaskInspector({
 
       <div className="mt-5 space-y-5">
         <div>
-          <label htmlFor="inspector-title" className="text-sm font-semibold text-slate-700">
-            Title
+          <label htmlFor="inspector-title" className="text-sm font-semibold text-[var(--text-primary)]">
+            Task title
           </label>
           <input
             id="inspector-title"
             value={task.title}
             onChange={(event) =>
-              onUpdateTask(
-                task.id,
-                { title: event.target.value },
-                { activityMessage: 'Updated task title' },
-              )
+              onUpdateTask(task.id, { title: event.target.value }, { activityMessage: 'Updated task title' })
             }
-            className="mt-2 min-h-12 w-full rounded-[22px] border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
+            className="mt-2 min-h-12 w-full rounded-[22px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent)] focus:ring-4 focus:ring-[var(--ring)]"
           />
         </div>
 
         <div>
-          <p className="text-sm font-semibold text-slate-700">Priority</p>
-          <div className="mt-2 grid grid-cols-4 gap-2">
+          <p className="text-sm font-semibold text-[var(--text-primary)]">Priority</p>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {(['P1', 'P2', 'P3', 'P4'] as PriorityLevel[]).map((level) => (
               <button
                 key={level}
                 type="button"
                 onClick={() =>
-                  onUpdateTask(
-                    task.id,
-                    { priority: level },
-                    { activityMessage: `Set priority to ${level}` },
-                  )
+                  onUpdateTask(task.id, { priority: level }, { activityMessage: `Set priority to ${level}` })
                 }
-                className={`rounded-2xl px-3 py-2 text-sm font-semibold transition ${
-                  task.priority === level ? PRIORITY_STYLES[level] : 'bg-slate-100 text-slate-600'
+                className={`rounded-[18px] px-3 py-2 text-sm font-semibold ${
+                  task.priority === level ? PRIORITY_STYLES[level] : 'bg-[var(--bg-muted)] text-[var(--text-secondary)]'
                 }`}
               >
                 {level}
@@ -116,7 +117,7 @@ export function TaskInspector({
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <label htmlFor="inspector-project" className="text-sm font-semibold text-slate-700">
+            <label htmlFor="inspector-project" className="text-sm font-semibold text-[var(--text-primary)]">
               Project
             </label>
             <select
@@ -135,7 +136,7 @@ export function TaskInspector({
                   { activityMessage: 'Moved task to another project', activityType: 'moved' },
                 )
               }}
-              className="mt-2 min-h-12 w-full rounded-[22px] border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
+              className="mt-2 min-h-12 w-full rounded-[22px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent)] focus:ring-4 focus:ring-[var(--ring)]"
             >
               {projects.map((project) => (
                 <option key={project.id} value={project.id}>
@@ -146,8 +147,8 @@ export function TaskInspector({
           </div>
 
           <div>
-            <label htmlFor="inspector-section" className="text-sm font-semibold text-slate-700">
-              Section
+            <label htmlFor="inspector-section" className="text-sm font-semibold text-[var(--text-primary)]">
+              Workflow stage
             </label>
             <select
               id="inspector-section"
@@ -159,7 +160,7 @@ export function TaskInspector({
                   { activityMessage: 'Moved task to another section', activityType: 'moved' },
                 )
               }
-              className="mt-2 min-h-12 w-full rounded-[22px] border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
+              className="mt-2 min-h-12 w-full rounded-[22px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent)] focus:ring-4 focus:ring-[var(--ring)]"
             >
               {projectSections.map((section) => (
                 <option key={section.id} value={section.id}>
@@ -171,7 +172,7 @@ export function TaskInspector({
         </div>
 
         <div>
-          <label htmlFor="inspector-due-date" className="text-sm font-semibold text-slate-700">
+          <label htmlFor="inspector-due-date" className="text-sm font-semibold text-[var(--text-primary)]">
             Due date
           </label>
           <input
@@ -185,15 +186,17 @@ export function TaskInspector({
                 { activityMessage: event.target.value ? 'Scheduled due date' : 'Cleared due date' },
               )
             }
-            className="mt-2 min-h-12 w-full rounded-[22px] border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
+            className="mt-2 min-h-12 w-full rounded-[22px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent)] focus:ring-4 focus:ring-[var(--ring)]"
           />
         </div>
 
         <div>
-          <p className="text-sm font-semibold text-slate-700">Labels</p>
+          <p className="text-sm font-semibold text-[var(--text-primary)]">Labels</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {labels.length === 0 ? (
-              <span className="text-sm text-slate-400">Create labels in the filter panel, then assign them here.</span>
+              <span className="text-sm text-[var(--text-muted)]">
+                Create labels in the filter panel, then assign them here.
+              </span>
             ) : (
               labels.map((label) => {
                 const active = task.labelIds.includes(label.id)
@@ -212,8 +215,8 @@ export function TaskInspector({
                         { activityMessage: 'Updated task labels' },
                       )
                     }
-                    className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${
-                      active ? 'ring-2 ring-slate-900' : ''
+                    className={`rounded-full px-3 py-1.5 text-sm font-semibold ${
+                      active ? 'ring-2 ring-[var(--accent)]' : ''
                     } ${LABEL_STYLES[label.color]}`}
                   >
                     #{label.name}

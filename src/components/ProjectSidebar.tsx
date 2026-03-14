@@ -1,19 +1,48 @@
 import { useState } from 'react'
-import type { Project, Section } from '../types/todo'
+import type { AppView, Project, Section } from '../types/todo'
 
 type ProjectSidebarProps = {
   projects: Project[]
   sections: Section[]
-  activeView: 'project' | 'today' | 'upcoming'
+  activeView: AppView
   activeProjectId: string
   todayCount: number
   upcomingCount: number
-  onSelectView: (view: 'project' | 'today' | 'upcoming') => void
+  calendarCount: number
+  projectTaskCounts: Record<string, number>
+  onSelectView: (view: AppView) => void
   onSelectProject: (projectId: string) => void
   onToggleProject: (projectId: string) => void
   onAddProject: (name: string) => void
   onAddSection: (projectId: string, name: string) => void
 }
+
+const NAV_ITEMS: Array<{
+  view: AppView
+  label: string
+  description: string
+}> = [
+  {
+    view: 'project',
+    label: 'Project workflow board',
+    description: 'Organize work by project and workflow stage.',
+  },
+  {
+    view: 'today',
+    label: "Today's scheduled tasks",
+    description: 'See what is due right now.',
+  },
+  {
+    view: 'upcoming',
+    label: 'Next 7 days',
+    description: 'Review upcoming commitments.',
+  },
+  {
+    view: 'calendar',
+    label: 'Calendar planner',
+    description: 'Browse the month and each scheduled day.',
+  },
+]
 
 export function ProjectSidebar({
   projects,
@@ -22,6 +51,8 @@ export function ProjectSidebar({
   activeProjectId,
   todayCount,
   upcomingCount,
+  calendarCount,
+  projectTaskCounts,
   onSelectView,
   onSelectProject,
   onToggleProject,
@@ -31,154 +62,166 @@ export function ProjectSidebar({
   const [projectName, setProjectName] = useState('')
   const [sectionDrafts, setSectionDrafts] = useState<Record<string, string>>({})
 
+  const countByView: Record<AppView, number | null> = {
+    project: projectTaskCounts[activeProjectId] ?? 0,
+    today: todayCount,
+    upcoming: upcomingCount,
+    calendar: calendarCount,
+  }
+
   return (
-    <aside className="rounded-[28px] border border-slate-200 bg-white/90 p-5 shadow-[0_30px_80px_-45px_rgba(15,23,42,0.55)] backdrop-blur">
-      <div className="border-b border-slate-200 pb-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600">Workspace</p>
-        <h2 className="mt-2 font-serif text-2xl font-semibold text-slate-900">Projects</h2>
-        <p className="mt-2 text-sm text-slate-500">Inbox stays ready for quick capture. Projects hold structure.</p>
+    <aside className="rounded-[32px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated)] p-5 shadow-[var(--shadow-panel)] backdrop-blur sm:p-6">
+      <div className="border-b border-[color:var(--border-soft)] pb-5">
+        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[var(--accent-strong)]">
+          Navigation
+        </p>
+        <h2 className="font-display mt-3 text-3xl leading-none text-[var(--text-primary)]">
+          Choose the workspace you need
+        </h2>
+        <p className="mt-3 text-sm text-[var(--text-muted)]">
+          Switch between project planning, scheduled work, the next seven days, and the calendar.
+        </p>
       </div>
 
       <div className="mt-5 space-y-2">
-        <button
-          type="button"
-          onClick={() => onSelectView('today')}
-          className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm font-semibold transition ${
-            activeView === 'today' ? 'bg-sky-500 text-white' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
-          }`}
-        >
-          <span>Today view</span>
-          <span className={`rounded-full px-2 py-0.5 text-xs ${activeView === 'today' ? 'bg-white/20' : 'bg-white text-slate-500'}`}>
-            {todayCount}
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => onSelectView('upcoming')}
-          className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm font-semibold transition ${
-            activeView === 'upcoming' ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
-          }`}
-        >
-          <span>Upcoming</span>
-          <span className={`rounded-full px-2 py-0.5 text-xs ${activeView === 'upcoming' ? 'bg-white/10' : 'bg-white text-slate-500'}`}>
-            {upcomingCount}
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => onSelectView('project')}
-          className={`w-full rounded-2xl px-4 py-3 text-left text-sm font-semibold transition ${
-            activeView === 'project' ? 'bg-amber-100 text-amber-900' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
-          }`}
-        >
-          Projects
-        </button>
-      </div>
-
-      <div className="mt-5 space-y-3">
-        {projects.map((project) => {
-          const projectSections = sections.filter((section) => section.projectId === project.id)
-          const draft = sectionDrafts[project.id] ?? ''
-
+        {NAV_ITEMS.map((item) => {
+          const isActive = activeView === item.view
           return (
-            <div
-              key={project.id}
-              className={`rounded-3xl border p-4 transition ${
-                activeProjectId === project.id
-                  ? 'border-slate-900 bg-slate-950 text-white'
-                  : 'border-slate-200 bg-slate-50 text-slate-900'
+            <button
+              key={item.view}
+              type="button"
+              onClick={() => onSelectView(item.view)}
+              className={`flex w-full items-start justify-between gap-3 rounded-[24px] border px-4 py-3 text-left ${
+                isActive
+                  ? 'border-transparent bg-[var(--accent)] text-[var(--accent-contrast)]'
+                  : 'border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] text-[var(--text-primary)] hover:bg-[var(--bg-muted)]'
               }`}
             >
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => onSelectProject(project.id)}
-                  className="flex flex-1 items-center gap-3 text-left"
-                >
-                  <span
-                    className="h-3 w-3 rounded-full"
-                    style={{ backgroundColor: activeProjectId === project.id ? '#fde68a' : project.color }}
-                  />
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{project.name}</p>
-                    <p
-                      className={`text-xs ${
-                        activeProjectId === project.id ? 'text-slate-300' : 'text-slate-500'
-                      }`}
-                    >
-                      {project.isInbox ? 'Default capture project' : `${projectSections.length} sections`}
-                    </p>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onToggleProject(project.id)}
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                    activeProjectId === project.id ? 'bg-white/10 text-white' : 'bg-white text-slate-600'
-                  }`}
-                >
-                  {project.collapsed ? 'Show' : 'Hide'}
-                </button>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">{item.label}</p>
+                <p className={`mt-1 text-xs ${isActive ? 'text-white/80' : 'text-[var(--text-muted)]'}`}>
+                  {item.description}
+                </p>
               </div>
-
-              {!project.collapsed && (
-                <div className="mt-4 space-y-2">
-                  {projectSections.map((section) => (
-                    <div
-                      key={section.id}
-                      className={`rounded-2xl px-3 py-2 text-sm ${
-                        activeProjectId === project.id ? 'bg-white/10 text-slate-100' : 'bg-white text-slate-600'
-                      }`}
-                    >
-                      {section.name}
-                    </div>
-                  ))}
-                  {!project.isInbox && (
-                    <div className="flex gap-2">
-                      <input
-                        value={draft}
-                        onChange={(event) =>
-                          setSectionDrafts((current) => ({
-                            ...current,
-                            [project.id]: event.target.value,
-                          }))
-                        }
-                        placeholder="New section"
-                        className={`min-h-11 flex-1 rounded-2xl border px-3 text-sm outline-none transition ${
-                          activeProjectId === project.id
-                            ? 'border-white/15 bg-white/10 text-white placeholder:text-slate-400'
-                            : 'border-slate-200 bg-white text-slate-900 placeholder:text-slate-400'
-                        }`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onAddSection(project.id, draft)
-                          setSectionDrafts((current) => ({
-                            ...current,
-                            [project.id]: '',
-                          }))
-                        }}
-                        className={`rounded-2xl px-4 text-sm font-semibold ${
-                          activeProjectId === project.id
-                            ? 'bg-amber-300 text-slate-950'
-                            : 'bg-slate-900 text-white'
-                        }`}
-                      >
-                        Add
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+              <span
+                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                  isActive
+                    ? 'bg-white/15 text-white'
+                    : 'bg-[var(--bg-muted)] text-[var(--text-secondary)]'
+                }`}
+              >
+                {countByView[item.view]}
+              </span>
+            </button>
           )
         })}
       </div>
 
-      <div className="mt-5 rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-4">
-        <label htmlFor="project-name" className="text-sm font-semibold text-slate-700">
-          Create project
+      <div className="mt-6 border-t border-[color:var(--border-soft)] pt-6">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[var(--text-subtle)]">
+              Projects
+            </p>
+            <h3 className="mt-2 text-lg font-semibold text-[var(--text-primary)]">
+              Project list and workflow stages
+            </h3>
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {projects.map((project) => {
+            const projectSections = sections.filter((section) => section.projectId === project.id)
+            const draft = sectionDrafts[project.id] ?? ''
+            const isActive = activeProjectId === project.id
+
+            return (
+              <div
+                key={project.id}
+                className={`rounded-[28px] border p-4 ${
+                  isActive
+                    ? 'border-transparent bg-[var(--bg-muted-strong)]'
+                    : 'border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => onSelectProject(project.id)}
+                    className="flex flex-1 items-center gap-3 text-left"
+                  >
+                    <span
+                      className="h-3 w-3 rounded-full"
+                      style={{ backgroundColor: project.color }}
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-[var(--text-primary)]">
+                        {project.name}
+                      </p>
+                      <p className="mt-1 text-xs text-[var(--text-muted)]">
+                        {projectTaskCounts[project.id] ?? 0} tasks
+                        {project.isInbox ? ' • default capture project' : ` • ${projectSections.length} workflow stages`}
+                      </p>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onToggleProject(project.id)}
+                    className="rounded-full bg-[var(--bg-elevated)] px-3 py-1 text-xs font-semibold text-[var(--text-secondary)]"
+                  >
+                    {project.collapsed ? 'Show stages' : 'Hide stages'}
+                  </button>
+                </div>
+
+                {!project.collapsed ? (
+                  <div className="mt-4 space-y-2">
+                    {projectSections.map((section) => (
+                      <div
+                        key={section.id}
+                        className="rounded-[20px] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--text-secondary)]"
+                      >
+                        {section.name}
+                      </div>
+                    ))}
+                    {!project.isInbox ? (
+                      <div className="flex gap-2 pt-1">
+                        <input
+                          value={draft}
+                          onChange={(event) =>
+                            setSectionDrafts((current) => ({
+                              ...current,
+                              [project.id]: event.target.value,
+                            }))
+                          }
+                          placeholder="New workflow stage"
+                          className="min-h-11 flex-1 rounded-[20px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent)] focus:ring-4 focus:ring-[var(--ring)]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onAddSection(project.id, draft)
+                            setSectionDrafts((current) => ({
+                              ...current,
+                              [project.id]: '',
+                            }))
+                          }}
+                          className="rounded-[20px] bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-contrast)] hover:brightness-105"
+                        >
+                          Add stage
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="mt-6 rounded-[28px] border border-dashed border-[color:var(--border-strong)] bg-[var(--bg-inset)] p-4">
+        <label htmlFor="project-name" className="text-sm font-semibold text-[var(--text-primary)]">
+          Create a new project
         </label>
         <div className="mt-3 flex gap-2">
           <input
@@ -192,8 +235,8 @@ export function ProjectSidebar({
                 setProjectName('')
               }
             }}
-            placeholder="Campaign launch"
-            className="min-h-11 flex-1 rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+            placeholder="Example: Website refresh"
+            className="min-h-11 flex-1 rounded-[20px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent)] focus:ring-4 focus:ring-[var(--ring)]"
           />
           <button
             type="button"
@@ -201,9 +244,9 @@ export function ProjectSidebar({
               onAddProject(projectName)
               setProjectName('')
             }}
-            className="rounded-2xl bg-sky-500 px-4 text-sm font-semibold text-white transition hover:bg-sky-600"
+            className="rounded-[20px] bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-contrast)] hover:brightness-105"
           >
-            Create
+            Create project
           </button>
         </div>
       </div>

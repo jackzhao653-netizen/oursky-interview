@@ -1,8 +1,9 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { CalendarBoard } from './components/CalendarBoard'
 import { FilterPanel } from './components/FilterPanel'
 import { ProjectBoard } from './components/ProjectBoard'
-import { ScheduleBoard } from './components/ScheduleBoard'
 import { ProjectSidebar } from './components/ProjectSidebar'
+import { ScheduleBoard } from './components/ScheduleBoard'
 import { TaskComposer } from './components/TaskComposer'
 import { TaskInspector } from './components/TaskInspector'
 import { Top3Section } from './components/Top3Section'
@@ -14,9 +15,28 @@ import {
   selectUpcomingTasks,
   useTaskStore,
 } from './store/useTaskStore'
-import { addDays, getTodayKey } from './utils/date'
+import { addDays, addMonths, getTodayKey } from './utils/date'
+
+type Theme = 'light' | 'dark'
+
+const THEME_STORAGE_KEY = 'oursky-ui-theme'
+
+function getInitialTheme(): Theme {
+  if (typeof window === 'undefined') {
+    return 'light'
+  }
+
+  const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY)
+  if (savedTheme === 'light' || savedTheme === 'dark') {
+    return savedTheme
+  }
+
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
 
 function App() {
+  const [theme, setTheme] = useState<Theme>(() => getInitialTheme())
+
   const hydrate = useTaskStore((state) => state.hydrate)
   const projects = useTaskStore((state) => state.projects)
   const sections = useTaskStore((state) => state.sections)
@@ -66,7 +86,15 @@ function App() {
     return () => window.clearTimeout(timer)
   }, [clearLimitMessage, limitMessage])
 
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme)
+  }, [theme])
+
   const today = useMemo(() => getTodayKey(), [])
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date(`${today}T00:00:00`))
+  const [selectedCalendarDateKey, setSelectedCalendarDateKey] = useState(today)
+
   const filteredTasks = filterVisibleTasks(tasks, filters).filter((task) => {
     if (filters.dueScope === 'today') {
       return task.dueDate === today
@@ -82,12 +110,20 @@ function App() {
 
     return true
   })
+
   const visibleProjectId = filters.projectId ?? activeProjectId
+  const activeProject = projects.find((project) => project.id === visibleProjectId) ?? null
   const projectSections = sections.filter((section) => section.projectId === visibleProjectId)
-  const projectTasks = selectTasksForProject(filteredTasks, filters.projectId ?? activeProjectId)
+  const projectTasks = selectTasksForProject(filteredTasks, visibleProjectId)
   const top3Todos = selectTop3Tasks(tasks, today)
   const suggestedP1Todos = tasks
-    .filter((task) => task.parentTaskId === null && task.priority === 'P1' && !task.completed && task.top3Date !== today)
+    .filter(
+      (task) =>
+        task.parentTaskId === null &&
+        task.priority === 'P1' &&
+        !task.completed &&
+        task.top3Date !== today,
+    )
     .slice(0, 3)
   const todayTasks = selectTasksDueOn(filteredTasks, today)
   const upcomingTasks = selectUpcomingTasks(filteredTasks, today, 7)
@@ -102,53 +138,158 @@ function App() {
     }
   }).filter((group) => group.tasks.length > 0)
 
+  const rootTasks = tasks.filter((task) => task.parentTaskId === null)
+  const openRootTasks = rootTasks.filter((task) => !task.completed)
+  const projectTaskCounts = projects.reduce<Record<string, number>>((accumulator, project) => {
+    accumulator[project.id] = rootTasks.filter((task) => task.projectId === project.id).length
+    return accumulator
+  }, {})
+  const calendarCount = filteredTasks.filter((task) => {
+    if (task.parentTaskId !== null || !task.dueDate) {
+      return false
+    }
+
+    const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1).getTime()
+    const monthEnd = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0).getTime()
+    const dueTime = new Date(`${task.dueDate}T00:00:00`).getTime()
+    return dueTime >= monthStart && dueTime <= monthEnd
+  }).length
+  const overdueCount = openRootTasks.filter((task) => task.dueDate !== null && task.dueDate < today).length
+
+  const headerStats = [
+    { label: 'Open tasks', value: openRootTasks.length },
+    { label: 'Due today', value: todayTasks.length },
+    { label: 'Next 7 days', value: upcomingTasks.length },
+    { label: "Today's focus", value: `${top3Todos.length}/3` },
+  ]
+
+  const viewSummary =
+    activeView === 'project'
+      ? 'Project workflow board'
+      : activeView === 'today'
+        ? "Today's scheduled tasks"
+        : activeView === 'upcoming'
+          ? 'Next 7 days'
+          : 'Calendar planner'
+
+  const handleChangeMonth = (offset: number) => {
+    const nextMonth = addMonths(calendarMonth, offset)
+    const normalizedMonth = new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 1)
+    setCalendarMonth(normalizedMonth)
+    setSelectedCalendarDateKey(getTodayKey(normalizedMonth))
+  }
+
+  const handleSelectCalendarDate = (dateKey: string) => {
+    setSelectedCalendarDateKey(dateKey)
+    const nextDate = new Date(`${dateKey}T00:00:00`)
+    if (
+      nextDate.getFullYear() !== calendarMonth.getFullYear() ||
+      nextDate.getMonth() !== calendarMonth.getMonth()
+    ) {
+      setCalendarMonth(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1))
+    }
+  }
+
+  const handleJumpToToday = () => {
+    const todayDate = new Date(`${today}T00:00:00`)
+    setCalendarMonth(todayDate)
+    setSelectedCalendarDateKey(today)
+  }
+
   return (
-    <main className="min-h-screen bg-[linear-gradient(135deg,#fffef5_0%,#f6fbff_42%,#eef2ff_100%)] px-4 py-8 text-slate-900 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <header className="rounded-[36px] border border-white/60 bg-white/75 px-6 py-7 shadow-[0_35px_80px_-50px_rgba(15,23,42,0.5)] backdrop-blur sm:px-8">
-          <div className="inline-flex rounded-full bg-sky-100 px-3 py-1 text-sm font-semibold text-sky-700">
-            Oursky task manager evolution
-          </div>
-          <div className="mt-4 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-            <div>
-              <h1 className="font-serif text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
-                Daily Top-3, now with real structure.
+    <main className="min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1520px] space-y-6">
+        <header className="overflow-hidden rounded-[40px] border border-[color:var(--border-soft)] bg-[var(--bg-hero)] px-6 py-7 shadow-[var(--shadow-panel)] backdrop-blur sm:px-8 sm:py-8">
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-4xl">
+              <div className="inline-flex rounded-full bg-[var(--accent-soft)] px-3 py-1 text-sm font-semibold text-[var(--accent-strong)]">
+                Oursky planning workspace
+              </div>
+              <h1 className="font-display mt-4 text-4xl leading-none text-[var(--text-primary)] sm:text-5xl lg:text-6xl">
+                Clean task planning across projects, schedules, and the calendar.
               </h1>
-              <p className="mt-3 max-w-3xl text-base text-slate-600">
-                Projects and sections turn the original Daily Top-3 ritual into a broader task manager without losing the focused daily planning loop.
+              <p className="mt-4 max-w-3xl text-base text-[var(--text-muted)] sm:text-lg">
+                Capture work once, organize it by project and workflow stage, pick today&apos;s focus tasks,
+                and review the month without losing context.
               </p>
             </div>
-            <div className="grid gap-3 text-sm text-slate-600 sm:grid-cols-3">
-              <div className="rounded-[24px] bg-slate-950 px-4 py-3 text-white">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-300">Projects</p>
-                <p className="mt-2 text-2xl font-semibold">{projects.length}</p>
+
+            <div className="flex w-full max-w-sm flex-col gap-4">
+              <div className="rounded-[28px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-subtle)]">
+                  Current workspace
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">{viewSummary}</p>
+                <p className="mt-2 text-sm text-[var(--text-muted)]">
+                  {activeProject ? `Active project: ${activeProject.name}` : 'No project selected'}
+                </p>
               </div>
-              <div className="rounded-[24px] bg-white px-4 py-3 shadow-sm">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Sections</p>
-                <p className="mt-2 text-2xl font-semibold text-slate-900">{projectSections.length}</p>
-              </div>
-              <div className="rounded-[24px] bg-white px-4 py-3 shadow-sm">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Top 3</p>
-                <p className="mt-2 text-2xl font-semibold text-slate-900">{top3Todos.length}/3</p>
-              </div>
+
+              <button
+                type="button"
+                onClick={() => setTheme((currentTheme) => (currentTheme === 'light' ? 'dark' : 'light'))}
+                className="flex items-center justify-between rounded-[28px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] px-4 py-4 text-left hover:bg-[var(--bg-muted)]"
+              >
+                <span>
+                  <span className="block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-subtle)]">
+                    Theme
+                  </span>
+                  <span className="mt-2 block text-base font-semibold text-[var(--text-primary)]">
+                    {theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+                  </span>
+                </span>
+                <span className="rounded-full bg-[var(--bg-muted)] px-3 py-1 text-sm font-semibold text-[var(--text-secondary)]">
+                  {theme === 'light' ? 'Light' : 'Dark'}
+                </span>
+              </button>
             </div>
+          </div>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {headerStats.map((stat) => (
+              <div
+                key={stat.label}
+                className="rounded-[24px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] px-4 py-4"
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-subtle)]">
+                  {stat.label}
+                </p>
+                <p className="mt-3 text-3xl font-semibold text-[var(--text-primary)]">{stat.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 flex flex-wrap gap-2">
+            <span className="rounded-full bg-[var(--bg-elevated-strong)] px-3 py-1.5 text-sm font-semibold text-[var(--text-secondary)]">
+              Filters affect project, schedule, and calendar views
+            </span>
+            <span className="rounded-full bg-[var(--bg-elevated-strong)] px-3 py-1.5 text-sm font-semibold text-[var(--text-secondary)]">
+              {overdueCount} overdue {overdueCount === 1 ? 'task' : 'tasks'}
+            </span>
+            <span className="rounded-full bg-[var(--bg-elevated-strong)] px-3 py-1.5 text-sm font-semibold text-[var(--text-secondary)]">
+              Calendar shows scheduled tasks by day
+            </span>
           </div>
         </header>
 
-        <div className="grid gap-6 xl:grid-cols-[300px,minmax(0,1fr),320px]">
-          <ProjectSidebar
-            projects={projects}
-            sections={sections}
-            activeView={activeView}
-            activeProjectId={activeProjectId}
-            todayCount={todayTasks.length}
-            upcomingCount={upcomingTasks.length}
-            onSelectView={setActiveView}
-            onSelectProject={setActiveProject}
-            onToggleProject={toggleProjectCollapsed}
-            onAddProject={addProject}
-            onAddSection={addSection}
-          />
+        <div className="grid gap-6 xl:grid-cols-[320px,minmax(0,1fr),360px]">
+          <div className="self-start xl:sticky xl:top-6">
+            <ProjectSidebar
+              projects={projects}
+              sections={sections}
+              activeView={activeView}
+              activeProjectId={activeProjectId}
+              todayCount={todayTasks.length}
+              upcomingCount={upcomingTasks.length}
+              calendarCount={calendarCount}
+              projectTaskCounts={projectTaskCounts}
+              onSelectView={setActiveView}
+              onSelectProject={setActiveProject}
+              onToggleProject={toggleProjectCollapsed}
+              onAddProject={addProject}
+              onAddSection={addSection}
+            />
+          </div>
 
           <div className="space-y-6">
             <TaskComposer
@@ -159,6 +300,76 @@ function App() {
               onAdd={addTask}
             />
 
+            {!isLoaded ? (
+              <div className="rounded-[32px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated)] p-6 text-sm text-[var(--text-muted)] shadow-[var(--shadow-soft)]">
+                Loading your workspace...
+              </div>
+            ) : activeView === 'today' ? (
+              <ScheduleBoard
+                title="Today's scheduled tasks"
+                subtitle="Everything due today is collected here so you can see commitments separately from the rest of the backlog."
+                groups={[{ title: 'Due today', dateKey: today, tasks: todayTasks }]}
+                projects={projects}
+                sections={sections}
+                labels={labels}
+                priorityIds={priorityIds}
+                onToggle={toggleTask}
+                onDelete={deleteTask}
+                onToggleTop3={toggleTop3}
+                onSelect={selectTask}
+              />
+            ) : activeView === 'upcoming' ? (
+              <ScheduleBoard
+                title="Next 7 days"
+                subtitle="Review the next week of work so upcoming commitments do not surprise you."
+                groups={
+                  upcomingGroups.length > 0
+                    ? upcomingGroups
+                    : [{ title: 'Next 7 days', tasks: [] }]
+                }
+                projects={projects}
+                sections={sections}
+                labels={labels}
+                priorityIds={priorityIds}
+                onToggle={toggleTask}
+                onDelete={deleteTask}
+                onToggleTop3={toggleTop3}
+                onSelect={selectTask}
+              />
+            ) : activeView === 'calendar' ? (
+              <CalendarBoard
+                month={calendarMonth}
+                selectedDateKey={selectedCalendarDateKey}
+                todayKey={today}
+                tasks={filteredTasks}
+                projects={projects}
+                sections={sections}
+                labels={labels}
+                priorityIds={priorityIds}
+                onSelectDate={handleSelectCalendarDate}
+                onChangeMonth={handleChangeMonth}
+                onJumpToToday={handleJumpToToday}
+                onToggle={toggleTask}
+                onDelete={deleteTask}
+                onToggleTop3={toggleTop3}
+                onSelectTask={selectTask}
+              />
+            ) : (
+              <ProjectBoard
+                project={activeProject}
+                sections={projectSections}
+                tasks={projectTasks}
+                labels={labels}
+                priorityIds={priorityIds}
+                onToggle={toggleTask}
+                onDelete={deleteTask}
+                onToggleTop3={toggleTop3}
+                onSelect={selectTask}
+              />
+            )}
+          </div>
+
+          <div className="space-y-6 self-start xl:sticky xl:top-6">
             <Top3Section
               todos={top3Todos}
               suggestedTodos={suggestedP1Todos}
@@ -186,64 +397,15 @@ function App() {
               onAddLabel={addLabel}
             />
 
-            {!isLoaded ? (
-              <div className="rounded-[28px] border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm">
-                Loading your tasks...
-              </div>
-            ) : activeView === 'today' ? (
-              <ScheduleBoard
-                title="Today view"
-                subtitle="Scheduled work for today stays separate from your Top-3 focus picks."
-                groups={[{ title: 'Due today', dateKey: today, tasks: todayTasks }]}
-                projects={projects}
-                sections={sections}
-                labels={labels}
-                priorityIds={priorityIds}
-                onToggle={toggleTask}
-                onDelete={deleteTask}
-                onToggleTop3={toggleTop3}
-                onSelect={selectTask}
-              />
-            ) : activeView === 'upcoming' ? (
-              <ScheduleBoard
-                title="Upcoming"
-                subtitle="The next seven days of scheduled work."
-                groups={
-                  upcomingGroups.length > 0
-                    ? upcomingGroups
-                    : [{ title: 'Next 7 days', tasks: [] }]
-                }
-                projects={projects}
-                sections={sections}
-                labels={labels}
-                priorityIds={priorityIds}
-                onToggle={toggleTask}
-                onDelete={deleteTask}
-                onToggleTop3={toggleTop3}
-                onSelect={selectTask}
-              />
-            ) : (
-              <ProjectBoard
-                sections={projectSections}
-                tasks={projectTasks}
-                labels={labels}
-                priorityIds={priorityIds}
-                onToggle={toggleTask}
-                onDelete={deleteTask}
-                onToggleTop3={toggleTop3}
-                onSelect={selectTask}
-              />
-            )}
+            <TaskInspector
+              task={selectedTask}
+              projects={projects}
+              sections={sections}
+              labels={labels}
+              onSelectTask={selectTask}
+              onUpdateTask={updateTask}
+            />
           </div>
-
-          <TaskInspector
-            task={selectedTask}
-            projects={projects}
-            sections={sections}
-            labels={labels}
-            onSelectTask={selectTask}
-            onUpdateTask={updateTask}
-          />
         </div>
       </div>
     </main>

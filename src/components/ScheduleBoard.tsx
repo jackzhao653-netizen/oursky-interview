@@ -37,29 +37,40 @@ export function ScheduleBoard({
 }: ScheduleBoardProps) {
   return (
     <section className="space-y-5">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">Scheduling</p>
-        <h2 className="mt-2 font-serif text-3xl font-semibold text-slate-950">{title}</h2>
-        <p className="mt-2 text-sm text-slate-500">{subtitle}</p>
+      <div className="rounded-[32px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated)] p-5 shadow-[var(--shadow-panel)] backdrop-blur sm:p-6">
+        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[var(--accent-strong)]">
+          Schedule
+        </p>
+        <h2 className="font-display mt-3 text-3xl leading-none text-[var(--text-primary)] sm:text-4xl">
+          {title}
+        </h2>
+        <p className="mt-3 max-w-3xl text-sm text-[var(--text-muted)] sm:text-base">{subtitle}</p>
       </div>
 
       <div className="space-y-4">
         {groups.map((group) => (
-          <div key={group.title} className="rounded-[30px] border border-slate-200 bg-white/85 p-4 shadow-[0_22px_50px_-40px_rgba(15,23,42,0.6)]">
-            <div className="flex items-center justify-between">
+          <div
+            key={group.title}
+            className="rounded-[30px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated)] p-4 shadow-[var(--shadow-soft)] backdrop-blur sm:p-5"
+          >
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">{group.title}</h3>
-                {group.dateKey && <p className="mt-1 text-sm text-slate-500">{formatLongDateLabel(group.dateKey)}</p>}
+                <h3 className="text-lg font-semibold text-[var(--text-primary)]">{group.title}</h3>
+                {group.dateKey ? (
+                  <p className="mt-1 text-sm text-[var(--text-muted)]">
+                    {formatLongDateLabel(group.dateKey)}
+                  </p>
+                ) : null}
               </div>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+              <span className="rounded-full bg-[var(--bg-muted)] px-3 py-1 text-xs font-semibold text-[var(--text-secondary)]">
                 {group.tasks.length}
               </span>
             </div>
 
             <div className="mt-4 space-y-3">
               {group.tasks.length === 0 ? (
-                <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
-                  Nothing scheduled here.
+                <div className="rounded-[24px] border border-dashed border-[color:var(--border-soft)] bg-[var(--bg-inset)] px-4 py-5 text-sm text-[var(--text-muted)]">
+                  No tasks are scheduled in this time block.
                 </div>
               ) : (
                 group.tasks.map((task) => {
@@ -67,21 +78,18 @@ export function ScheduleBoard({
                   const project = projects.find((candidate) => candidate.id === task.projectId)
 
                   return (
-                    <div key={task.id} className="space-y-2">
-                      <div className="px-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                        {project?.name ?? 'Project'} / {section?.name ?? 'Section'}
-                      </div>
-                      <TaskCard
-                        task={task}
-                        section={section}
-                        labels={labels}
-                        isPriority={priorityIds.has(task.id)}
-                        onToggle={onToggle}
-                        onDelete={onDelete}
-                        onToggleTop3={onToggleTop3}
-                        onSelect={onSelect}
-                      />
-                    </div>
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      section={section}
+                      projectName={project?.name}
+                      labels={labels}
+                      isPriority={priorityIds.has(task.id)}
+                      onToggle={onToggle}
+                      onDelete={onDelete}
+                      onToggleTop3={onToggleTop3}
+                      onSelect={onSelect}
+                    />
                   )
                 })
               )}

@@ -36,18 +36,47 @@ export function TaskComposer({
   const resolvedSectionId = sectionId || projectSections[0]?.id || ''
   const resolvedDueDate = parseNaturalDateInput(dueInput)
 
+  const submit = () => {
+    if (dueInput.trim().length > 0 && !resolvedDueDate) {
+      return
+    }
+
+    const didAdd = onAdd({
+      title,
+      projectId,
+      sectionId: resolvedSectionId,
+      dueDate: resolvedDueDate,
+      priority,
+    })
+
+    if (!didAdd) {
+      return
+    }
+
+    setTitle('')
+    setDueInput('')
+    setPriority('P3')
+    inputRef.current?.focus()
+  }
+
   return (
-    <section className="rounded-[32px] border border-slate-200 bg-white/90 p-5 shadow-[0_25px_70px_-40px_rgba(14,116,144,0.55)] backdrop-blur sm:p-6">
+    <section className="rounded-[34px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated)] p-5 shadow-[var(--shadow-panel)] backdrop-blur sm:p-6">
       <div className="flex flex-col gap-5">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-teal-600">Capture</p>
-          <h2 className="mt-2 font-serif text-3xl font-semibold text-slate-950">Add the next thing that matters</h2>
-          <p className="mt-2 max-w-2xl text-sm text-slate-500">
-            New work starts in the selected project and section, so the backlog stays organized from the first keystroke.
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[var(--accent-strong)]">
+              Quick task capture
+            </p>
+            <h2 className="font-display mt-3 text-3xl leading-none text-[var(--text-primary)] sm:text-4xl">
+              Add a task with the right project, stage, and due date
+            </h2>
+          </div>
+          <p className="max-w-md text-sm text-[var(--text-muted)]">
+            New work is organized before it lands in the list, so the rest of the workspace stays tidy.
           </p>
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr),180px,180px]">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.35fr),200px,200px]">
           <input
             ref={inputRef}
             value={title}
@@ -55,27 +84,11 @@ export function TaskComposer({
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
                 event.preventDefault()
-                if (dueInput.trim().length > 0 && !resolvedDueDate) {
-                  return
-                }
-
-                const didAdd = onAdd({
-                  title,
-                  projectId,
-                  sectionId: resolvedSectionId,
-                  dueDate: resolvedDueDate,
-                  priority,
-                })
-                if (didAdd) {
-                  setTitle('')
-                  setDueInput('')
-                  setPriority('P3')
-                  inputRef.current?.focus()
-                }
+                submit()
               }
             }}
-            placeholder="Write launch summary"
-            className="min-h-12 rounded-[22px] border border-slate-200 bg-slate-50 px-4 text-base text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
+            placeholder="Example: Prepare launch notes for Monday review"
+            className="min-h-12 rounded-[22px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] px-4 text-base text-[var(--text-primary)] outline-none focus:border-[color:var(--accent)] focus:ring-4 focus:ring-[var(--ring)]"
           />
 
           <select
@@ -86,7 +99,7 @@ export function TaskComposer({
               const nextSections = sections.filter((section) => section.projectId === nextProjectId)
               setSectionId(nextSections[0]?.id ?? '')
             }}
-            className="min-h-12 rounded-[22px] border border-slate-200 bg-slate-50 px-4 text-sm font-medium text-slate-700 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
+            className="min-h-12 rounded-[22px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] px-4 text-sm font-medium text-[var(--text-secondary)] outline-none focus:border-[color:var(--accent)] focus:ring-4 focus:ring-[var(--ring)]"
           >
             {projects.map((project) => (
               <option key={project.id} value={project.id}>
@@ -98,7 +111,7 @@ export function TaskComposer({
           <select
             value={resolvedSectionId}
             onChange={(event) => setSectionId(event.target.value)}
-            className="min-h-12 rounded-[22px] border border-slate-200 bg-slate-50 px-4 text-sm font-medium text-slate-700 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
+            className="min-h-12 rounded-[22px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] px-4 text-sm font-medium text-[var(--text-secondary)] outline-none focus:border-[color:var(--accent)] focus:ring-4 focus:ring-[var(--ring)]"
           >
             {projectSections.map((section) => (
               <option key={section.id} value={section.id}>
@@ -106,32 +119,31 @@ export function TaskComposer({
               </option>
             ))}
           </select>
-
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr),180px,140px,auto]">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr),180px,160px,auto]">
           <input
             value={dueInput}
             onChange={(event) => setDueInput(event.target.value)}
-            placeholder="Due date or phrase: tomorrow, next Monday, 2026-03-20"
-            className={`min-h-12 rounded-[22px] border px-4 text-sm outline-none transition ${
+            placeholder="Due date: tomorrow, next Monday, or 2026-03-20"
+            className={`min-h-12 rounded-[22px] border px-4 text-sm outline-none focus:ring-4 ${
               dueInput.trim().length > 0 && !resolvedDueDate
                 ? 'border-rose-300 bg-rose-50 text-rose-700 focus:ring-rose-100'
-                : 'border-slate-200 bg-slate-50 text-slate-900 focus:border-sky-400 focus:bg-white focus:ring-sky-100'
-            } focus:ring-4`}
+                : 'border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] text-[var(--text-primary)] focus:border-[color:var(--accent)] focus:ring-[var(--ring)]'
+            }`}
           />
 
           <input
             type="date"
             value={resolvedDueDate ?? ''}
             onChange={(event) => setDueInput(event.target.value)}
-            className="min-h-12 rounded-[22px] border border-slate-200 bg-slate-50 px-4 text-sm font-medium text-slate-700 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
+            className="min-h-12 rounded-[22px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] px-4 text-sm font-medium text-[var(--text-secondary)] outline-none focus:border-[color:var(--accent)] focus:ring-4 focus:ring-[var(--ring)]"
           />
 
           <select
             value={priority}
             onChange={(event) => setPriority(event.target.value as PriorityLevel)}
-            className="min-h-12 rounded-[22px] border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
+            className="min-h-12 rounded-[22px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] px-4 text-sm font-semibold text-[var(--text-secondary)] outline-none focus:border-[color:var(--accent)] focus:ring-4 focus:ring-[var(--ring)]"
           >
             <option value="P1">P1 urgent</option>
             <option value="P2">P2 high</option>
@@ -141,39 +153,31 @@ export function TaskComposer({
 
           <button
             type="button"
-            onClick={() => {
-              if (dueInput.trim().length > 0 && !resolvedDueDate) {
-                return
-              }
-
-              const didAdd = onAdd({
-                title,
-                projectId,
-                sectionId: resolvedSectionId,
-                dueDate: resolvedDueDate,
-                priority,
-              })
-              if (didAdd) {
-                setTitle('')
-                setDueInput('')
-                setPriority('P3')
-                inputRef.current?.focus()
-              }
-            }}
-            className="min-h-12 rounded-[22px] bg-slate-950 px-5 text-sm font-semibold text-white transition hover:bg-slate-800"
+            onClick={submit}
+            className="min-h-12 rounded-[22px] bg-[var(--accent)] px-5 text-sm font-semibold text-[var(--accent-contrast)] hover:brightness-105"
           >
             Add task
           </button>
         </div>
 
-        <div className="min-h-6 text-sm">
-          {dueInput.trim().length > 0 && !resolvedDueDate ? (
-            <p className="text-rose-600">Unable to parse that due date. Try a date like 2026-03-20 or a phrase like "tomorrow".</p>
-          ) : resolvedDueDate ? (
-            <p className="text-slate-500">Scheduled for {formatLongDateLabel(resolvedDueDate)}.</p>
-          ) : (
-            <p className="text-slate-400">Leave due date blank for unscheduled work.</p>
-          )}
+        <div className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            {dueInput.trim().length > 0 && !resolvedDueDate ? (
+              <p className="text-rose-600">
+                That date could not be parsed. Try a phrase like &quot;tomorrow&quot; or a date like
+                {' '}2026-03-20.
+              </p>
+            ) : resolvedDueDate ? (
+              <p className="text-[var(--text-muted)]">
+                This task will appear on {formatLongDateLabel(resolvedDueDate)}.
+              </p>
+            ) : (
+              <p className="text-[var(--text-muted)]">Leave the due date blank if the task is unscheduled.</p>
+            )}
+          </div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-subtle)]">
+            Enter submits from the title field
+          </p>
         </div>
       </div>
     </section>

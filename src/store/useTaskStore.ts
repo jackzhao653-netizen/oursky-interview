@@ -707,7 +707,7 @@ export function selectUpcomingTasks(tasks: Todo[], today: string, days: number) 
 
     const taskTime = new Date(`${task.dueDate}T00:00:00`).getTime()
     const delta = Math.round((taskTime - todayTime) / 86400000)
-    return delta >= 0 && delta <= days
+    return delta >= 1 && delta <= days
   })
 }
 

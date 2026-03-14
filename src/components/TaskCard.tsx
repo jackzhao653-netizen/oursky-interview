@@ -8,10 +8,24 @@ const PRIORITY_BADGES = {
   P4: 'bg-emerald-200 text-emerald-900',
 } as const
 
+const LABEL_STYLES = {
+  slate: 'bg-slate-200 text-slate-700',
+  red: 'bg-red-100 text-red-700',
+  orange: 'bg-orange-100 text-orange-700',
+  amber: 'bg-amber-100 text-amber-800',
+  green: 'bg-green-100 text-green-700',
+  teal: 'bg-teal-100 text-teal-700',
+  sky: 'bg-sky-100 text-sky-700',
+  blue: 'bg-blue-100 text-blue-700',
+  indigo: 'bg-indigo-100 text-indigo-700',
+  pink: 'bg-pink-100 text-pink-700',
+} as const
+
 type TaskCardProps = {
   task: Todo
   section?: Section
   labels?: Label[]
+  projectName?: string
   isPriority: boolean
   onToggle: (id: string) => void
   onDelete: (id: string) => void
@@ -23,6 +37,7 @@ export function TaskCard({
   task,
   section,
   labels = [],
+  projectName,
   isPriority,
   onToggle,
   onDelete,
@@ -35,14 +50,14 @@ export function TaskCard({
       ? 'bg-rose-100 text-rose-700'
       : task.dueDate === todayKey
         ? 'bg-sky-100 text-sky-700'
-        : 'bg-slate-100 text-slate-600'
+        : 'bg-slate-200 text-slate-700'
 
   return (
     <article
-      className={`rounded-[28px] border p-4 shadow-sm transition ${
+      className={`rounded-[28px] border p-4 ${
         isPriority
-          ? 'border-amber-200 bg-amber-50/90 shadow-[0_20px_45px_-35px_rgba(217,119,6,0.65)]'
-          : 'border-slate-200 bg-white/90 hover:border-slate-300'
+          ? 'border-amber-300/60 bg-[color:var(--warning-soft)] shadow-[var(--shadow-soft)]'
+          : 'border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] shadow-[var(--shadow-soft)]'
       }`}
     >
       <div className="flex items-start gap-3">
@@ -55,59 +70,85 @@ export function TaskCard({
         />
 
         <div className="min-w-0 flex-1">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <p className={`text-base font-semibold text-slate-900 ${task.completed ? 'line-through text-slate-400' : ''}`}>
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0">
+              <p
+                className={`text-base font-semibold text-[var(--text-primary)] ${
+                  task.completed ? 'text-[var(--text-subtle)] line-through' : ''
+                }`}
+              >
                 {task.title}
               </p>
-              <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">{section?.name ?? 'No section'}</span>
-                <span className={`rounded-full px-2.5 py-1 ${PRIORITY_BADGES[task.priority]}`}>{task.priority}</span>
-                {task.dueDate && (
+              <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
+                {projectName ? (
+                  <span className="rounded-full bg-[var(--bg-muted)] px-2.5 py-1 text-[var(--text-secondary)]">
+                    {projectName}
+                  </span>
+                ) : null}
+                <span className="rounded-full bg-[var(--bg-muted)] px-2.5 py-1 text-[var(--text-secondary)]">
+                  {section?.name ?? 'No workflow stage'}
+                </span>
+                <span className={`rounded-full px-2.5 py-1 ${PRIORITY_BADGES[task.priority]}`}>
+                  {task.priority}
+                </span>
+                {task.dueDate ? (
                   <span className={`rounded-full px-2.5 py-1 ${dueBadgeClass}`}>
                     {getRelativeDueLabel(task.dueDate, todayKey)}
                   </span>
-                )}
-                {isPriority && <span className="rounded-full bg-amber-200 px-2.5 py-1 text-amber-900">Top 3</span>}
-                {task.rolledOverOn && (
-                  <span className="rounded-full bg-sky-100 px-2.5 py-1 text-sky-700">Rolled over</span>
-                )}
-                {task.completed && (
-                  <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-700">Done</span>
-                )}
+                ) : null}
+                {isPriority ? (
+                  <span className="rounded-full bg-amber-200 px-2.5 py-1 text-amber-900">
+                    Today&apos;s focus list
+                  </span>
+                ) : null}
+                {task.rolledOverOn ? (
+                  <span className="rounded-full bg-sky-100 px-2.5 py-1 text-sky-700">
+                    Carried over from yesterday
+                  </span>
+                ) : null}
+                {task.completed ? (
+                  <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-700">
+                    Completed
+                  </span>
+                ) : null}
                 {labels
                   .filter((label) => task.labelIds.includes(label.id))
                   .map((label) => (
-                    <span key={label.id} className="rounded-full bg-indigo-100 px-2.5 py-1 text-indigo-700">
+                    <span
+                      key={label.id}
+                      className={`rounded-full px-2.5 py-1 ${LABEL_STYLES[label.color]}`}
+                    >
                       #{label.name}
                     </span>
                   ))}
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 xl:justify-end">
               <button
                 type="button"
                 onClick={() => onToggleTop3(task.id)}
-                className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${
-                  isPriority ? 'bg-amber-200 text-amber-900 hover:bg-amber-300' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                className={`rounded-full px-3 py-1.5 text-sm font-semibold ${
+                  isPriority
+                    ? 'bg-amber-200 text-amber-900 hover:bg-amber-300'
+                    : 'bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:bg-[var(--bg-muted-strong)]'
                 }`}
               >
-                {isPriority ? 'Remove Top 3' : 'Add to Top 3'}
+                {isPriority ? 'Remove from focus list' : 'Add to focus list'}
               </button>
               <button
                 type="button"
                 onClick={() => onSelect(task.id)}
-                className="rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-50"
+                className="rounded-full border border-[color:var(--border-soft)] bg-transparent px-3 py-1.5 text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-muted)]"
               >
-                Inspect
+                Edit details
               </button>
               <button
                 type="button"
                 onClick={() => onDelete(task.id)}
-                className="rounded-full bg-rose-50 px-3 py-1.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-100"
+                className="rounded-full bg-rose-50 px-3 py-1.5 text-sm font-semibold text-rose-700 hover:bg-rose-100"
               >
-                Delete
+                Delete task
               </button>
             </div>
           </div>

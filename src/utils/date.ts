@@ -43,6 +43,13 @@ export function addMonths(date: Date, amount: number) {
   return next
 }
 
+export function getMonthLabel(date: Date) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'long',
+    year: 'numeric',
+  }).format(date)
+}
+
 export function parseNaturalDateInput(input: string, baseDate = new Date()) {
   const trimmed = input.trim()
   const normalized = trimmed.toLowerCase()

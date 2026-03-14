@@ -1,5 +1,13 @@
 import { useState } from 'react'
-import { LABEL_COLORS, type FilterState, type Label, type LabelColor, type PriorityLevel, type Project, type SavedFilter } from '../types/todo'
+import {
+  LABEL_COLORS,
+  type FilterState,
+  type Label,
+  type LabelColor,
+  type PriorityLevel,
+  type Project,
+  type SavedFilter,
+} from '../types/todo'
 
 const COLOR_STYLES: Record<LabelColor, string> = {
   slate: 'bg-slate-200 text-slate-700',
@@ -41,19 +49,26 @@ export function FilterPanel({
   onDeleteSavedFilter,
   onAddLabel,
 }: FilterPanelProps) {
-  const [filterName, setFilterName] = useState('')
+  const [savedViewName, setSavedViewName] = useState('')
   const [labelName, setLabelName] = useState('')
   const [labelColor, setLabelColor] = useState<LabelColor>('sky')
 
   return (
-    <section className="rounded-[30px] border border-slate-200 bg-white/85 p-5 shadow-[0_22px_50px_-40px_rgba(15,23,42,0.6)]">
-      <div className="flex flex-col gap-5">
+    <section className="rounded-[30px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated)] p-5 shadow-[var(--shadow-soft)] backdrop-blur">
+      <div className="space-y-5">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">Filters</p>
-          <h2 className="mt-2 font-serif text-3xl font-semibold text-slate-950">Labels and saved views</h2>
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[var(--accent-strong)]">
+            Filters and labels
+          </p>
+          <h2 className="font-display mt-3 text-3xl leading-none text-[var(--text-primary)]">
+            Refine what appears in the workspace
+          </h2>
+          <p className="mt-3 text-sm text-[var(--text-muted)]">
+            Narrow the task list by project, urgency, schedule, or label, then save that filter set for later.
+          </p>
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-[180px,160px,160px,auto]">
+        <div className="grid gap-3">
           <select
             value={filters.projectId ?? 'all'}
             onChange={(event) =>
@@ -61,7 +76,7 @@ export function FilterPanel({
                 projectId: event.target.value === 'all' ? null : event.target.value,
               })
             }
-            className="min-h-12 rounded-[22px] border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
+            className="min-h-12 rounded-[22px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] px-4 text-sm text-[var(--text-secondary)] outline-none focus:border-[color:var(--accent)] focus:ring-4 focus:ring-[var(--ring)]"
           >
             <option value="all">All projects</option>
             {projects.map((project) => (
@@ -71,62 +86,64 @@ export function FilterPanel({
             ))}
           </select>
 
-          <select
-            value={filters.priority}
-            onChange={(event) =>
-              onSetFilters({
-                priority: event.target.value as PriorityLevel | 'all',
-              })
-            }
-            className="min-h-12 rounded-[22px] border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
-          >
-            <option value="all">All priorities</option>
-            <option value="P1">P1</option>
-            <option value="P2">P2</option>
-            <option value="P3">P3</option>
-            <option value="P4">P4</option>
-          </select>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <select
+              value={filters.priority}
+              onChange={(event) =>
+                onSetFilters({
+                  priority: event.target.value as PriorityLevel | 'all',
+                })
+              }
+              className="min-h-12 rounded-[22px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] px-4 text-sm text-[var(--text-secondary)] outline-none focus:border-[color:var(--accent)] focus:ring-4 focus:ring-[var(--ring)]"
+            >
+              <option value="all">All priorities</option>
+              <option value="P1">P1 urgent</option>
+              <option value="P2">P2 high</option>
+              <option value="P3">P3 medium</option>
+              <option value="P4">P4 low</option>
+            </select>
 
-          <select
-            value={filters.dueScope}
-            onChange={(event) =>
-              onSetFilters({
-                dueScope: event.target.value as FilterState['dueScope'],
-              })
-            }
-            className="min-h-12 rounded-[22px] border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
-          >
-            <option value="all">Any due date</option>
-            <option value="today">Today only</option>
-            <option value="upcoming">Upcoming only</option>
-            <option value="overdue">Overdue only</option>
-            <option value="unscheduled">Unscheduled</option>
-          </select>
+            <select
+              value={filters.dueScope}
+              onChange={(event) =>
+                onSetFilters({
+                  dueScope: event.target.value as FilterState['dueScope'],
+                })
+              }
+              className="min-h-12 rounded-[22px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] px-4 text-sm text-[var(--text-secondary)] outline-none focus:border-[color:var(--accent)] focus:ring-4 focus:ring-[var(--ring)]"
+            >
+              <option value="all">Any due date</option>
+              <option value="today">Due today</option>
+              <option value="upcoming">Due later</option>
+              <option value="overdue">Overdue</option>
+              <option value="unscheduled">No due date</option>
+            </select>
+          </div>
+
+          <label className="flex items-center gap-3 rounded-[22px] bg-[var(--bg-inset)] px-4 py-3 text-sm font-medium text-[var(--text-secondary)]">
+            <input
+              type="checkbox"
+              checked={filters.showCompleted}
+              onChange={(event) => onSetFilters({ showCompleted: event.target.checked })}
+              className="h-4 w-4 rounded border-slate-300 text-[var(--accent)] focus:ring-[var(--accent)]"
+            />
+            Include completed tasks in filtered results
+          </label>
 
           <button
             type="button"
             onClick={onResetFilters}
-            className="min-h-12 rounded-[22px] bg-slate-950 px-5 text-sm font-semibold text-white transition hover:bg-slate-800"
+            className="min-h-12 rounded-[22px] border border-[color:var(--border-soft)] bg-transparent px-5 text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-muted)]"
           >
-            Clear filters
+            Reset all filters
           </button>
         </div>
 
-        <label className="flex items-center gap-3 text-sm font-medium text-slate-600">
-          <input
-            type="checkbox"
-            checked={filters.showCompleted}
-            onChange={(event) => onSetFilters({ showCompleted: event.target.checked })}
-            className="h-4 w-4 rounded border-slate-300 text-sky-500 focus:ring-sky-400"
-          />
-          Include completed tasks
-        </label>
-
         <div className="space-y-3">
-          <p className="text-sm font-semibold text-slate-700">Filter by labels</p>
+          <p className="text-sm font-semibold text-[var(--text-primary)]">Label filter</p>
           <div className="flex flex-wrap gap-2">
             {labels.length === 0 ? (
-              <span className="text-sm text-slate-400">No labels yet.</span>
+              <span className="text-sm text-[var(--text-muted)]">No labels have been created yet.</span>
             ) : (
               labels.map((label) => {
                 const isActive = filters.labelIds.includes(label.id)
@@ -141,8 +158,8 @@ export function FilterPanel({
                           : [...filters.labelIds, label.id],
                       })
                     }
-                    className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${
-                      isActive ? 'ring-2 ring-slate-900' : ''
+                    className={`rounded-full px-3 py-1.5 text-sm font-semibold ${
+                      isActive ? 'ring-2 ring-[var(--accent)]' : ''
                     } ${COLOR_STYLES[label.color]}`}
                   >
                     #{label.name}
@@ -153,17 +170,17 @@ export function FilterPanel({
           </div>
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr),160px,auto]">
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr),140px]">
           <input
             value={labelName}
             onChange={(event) => setLabelName(event.target.value)}
-            placeholder="New label"
-            className="min-h-12 rounded-[22px] border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
+            placeholder="Create a new label"
+            className="min-h-12 rounded-[22px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent)] focus:ring-4 focus:ring-[var(--ring)]"
           />
           <select
             value={labelColor}
             onChange={(event) => setLabelColor(event.target.value as LabelColor)}
-            className="min-h-12 rounded-[22px] border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
+            className="min-h-12 rounded-[22px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] px-4 text-sm text-[var(--text-secondary)] outline-none focus:border-[color:var(--accent)] focus:ring-4 focus:ring-[var(--ring)]"
           >
             {LABEL_COLORS.map((color) => (
               <option key={color} value={color}>
@@ -171,65 +188,78 @@ export function FilterPanel({
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            onClick={() => {
-              onAddLabel(labelName, labelColor)
-              setLabelName('')
-            }}
-            className="min-h-12 rounded-[22px] bg-white px-5 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-50"
-          >
-            Add label
-          </button>
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr),auto]">
-          <input
-            value={filterName}
-            onChange={(event) => setFilterName(event.target.value)}
-            placeholder="Save current filter"
-            className="min-h-12 rounded-[22px] border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
-          />
-          <button
-            type="button"
-            onClick={() => {
-              onSaveCurrentFilter(filterName)
-              setFilterName('')
-            }}
-            className="min-h-12 rounded-[22px] bg-sky-500 px-5 text-sm font-semibold text-white transition hover:bg-sky-600"
-          >
-            Save filter
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => {
+            onAddLabel(labelName, labelColor)
+            setLabelName('')
+          }}
+          className="min-h-12 w-full rounded-[22px] bg-[var(--bg-muted)] px-5 text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-muted-strong)]"
+        >
+          Add label
+        </button>
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => onApplySavedFilter(null)}
-            className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${
-              activeSavedFilterId === null ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600'
-            }`}
-          >
-            Live filters
-          </button>
-          {savedFilters.map((filter) => (
-            <div key={filter.id} className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5">
-              <button
-                type="button"
-                onClick={() => onApplySavedFilter(filter.id)}
-                className={`text-sm font-semibold ${activeSavedFilterId === filter.id ? 'text-slate-950' : 'text-slate-600'}`}
+        <div className="space-y-3">
+          <p className="text-sm font-semibold text-[var(--text-primary)]">Saved filter sets</p>
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr),auto]">
+            <input
+              value={savedViewName}
+              onChange={(event) => setSavedViewName(event.target.value)}
+              placeholder="Name this filter set"
+              className="min-h-12 rounded-[22px] border border-[color:var(--border-soft)] bg-[var(--bg-elevated-strong)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent)] focus:ring-4 focus:ring-[var(--ring)]"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                onSaveCurrentFilter(savedViewName)
+                setSavedViewName('')
+              }}
+              className="min-h-12 rounded-[22px] bg-[var(--accent)] px-5 text-sm font-semibold text-[var(--accent-contrast)] hover:brightness-105"
+            >
+              Save filter set
+            </button>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => onApplySavedFilter(null)}
+              className={`rounded-full px-3 py-1.5 text-sm font-semibold ${
+                activeSavedFilterId === null
+                  ? 'bg-[var(--accent)] text-[var(--accent-contrast)]'
+                  : 'bg-[var(--bg-muted)] text-[var(--text-secondary)]'
+              }`}
+            >
+              Current filter controls
+            </button>
+            {savedFilters.map((filter) => (
+              <div
+                key={filter.id}
+                className="flex items-center gap-2 rounded-full bg-[var(--bg-muted)] px-3 py-1.5"
               >
-                {filter.name}
-              </button>
-              <button
-                type="button"
-                onClick={() => onDeleteSavedFilter(filter.id)}
-                className="text-xs font-semibold text-rose-600"
-              >
-                Delete
-              </button>
-            </div>
-          ))}
+                <button
+                  type="button"
+                  onClick={() => onApplySavedFilter(filter.id)}
+                  className={`text-sm font-semibold ${
+                    activeSavedFilterId === filter.id
+                      ? 'text-[var(--text-primary)]'
+                      : 'text-[var(--text-secondary)]'
+                  }`}
+                >
+                  {filter.name}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDeleteSavedFilter(filter.id)}
+                  className="text-xs font-semibold text-rose-600"
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </section>

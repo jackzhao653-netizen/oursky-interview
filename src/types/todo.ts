@@ -19,7 +19,7 @@ export const INBOX_DONE_SECTION_ID = 'section-inbox-done'
 export type PriorityLevel = (typeof PRIORITY_LEVELS)[number]
 export type LabelColor = (typeof LABEL_COLORS)[number]
 export type DueScope = 'all' | 'today' | 'upcoming' | 'overdue' | 'unscheduled'
-export type AppView = 'project' | 'today' | 'upcoming'
+export type AppView = 'project' | 'today' | 'upcoming' | 'calendar'
 export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly' | 'custom'
 
 export type Project = {
