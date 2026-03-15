@@ -2,29 +2,21 @@
 
 ## What Feature I Added
 
-**Daily Top-3 Priority System**
+Recurring tasks with color-coded priorities.
 
-A dedicated section at the top of the calendar view that automatically rolls over incomplete tasks from the previous day and limits you to three priority items per day.
+The feature lets you set tasks to repeat (weekly/monthly/once) and assign them colors (red/yellow/green/white) based on importance. You can also set when they stop—after X times, or on a specific date, or never.
 
 ## What Problem It Solves In My Daily Workflow
 
-As a mechanical engineering student juggling coursework, final year project work, and job applications, I constantly face decision paralysis when looking at a long todo list. I waste time each morning deciding what to work on first, and often end the day having made progress on many things but completed nothing significant.
+I'm a mechanical engineering student juggling coursework, my final year project, and job hunting. Every Monday I have a lab report due. Every Friday there's a team meeting. Once a month I need to submit project updates. Before this, I was manually re-creating these tasks every week, which was annoying and I'd sometimes forget.
 
-The Daily Top-3 forces me to commit to three specific outcomes before the day starts. When I open the app in the morning, yesterday's incomplete items are already there, demanding a decision: keep them as priorities or demote them. This creates accountability and prevents tasks from drifting indefinitely.
+Now I set "Lab Report" to repeat every Monday (yellow, because it's important but not urgent), and it just shows up automatically. Same with "Team Meeting" every Friday (green, routine). When I open the app on Monday morning, I immediately see what's yellow and know that's what I need to focus on today.
 
-**Specific use cases:**
-
-- **Morning planning (around 8 AM):** Review rolled-over items from yesterday and set today's three priorities. The auto-rollover means I can't ignore yesterday's failures—I have to actively choose to keep or drop each item.
-
-- **End-of-day review (around 10 PM):** Complete remaining priorities or acknowledge what needs to roll over. The three-item limit forces me to be realistic about what's achievable in one day.
-
-- **Mid-day focus:** When I get distracted by new requests or ideas, the Top-3 section serves as a visual anchor reminding me what I committed to completing today.
+The specific moment this helps: Sunday night when I'm planning my week. I can see all my recurring stuff is already there with the right colors, so I just need to add the one-off tasks. Saves me probably 10 minutes of setup time and mental energy every week.
 
 ## One Thing I Would Improve With More Time
 
-I would add a **completion streak indicator** that shows how many consecutive days I've completed all three priorities. This would add a gamification element that leverages loss aversion—once you have a 7-day streak, you don't want to break it. It would provide positive reinforcement for the behavior the feature is trying to encourage.
-
-The streak would reset when you fail to complete all three items, creating a clear feedback loop that makes the cost of overcommitting or procrastinating immediately visible.
+I'd add a streak counter for recurring tasks. Like "you've completed this weekly task 7 times in a row." It's a small thing but I think it would make me more motivated to not break the streak, especially for things like "review job postings" that I tend to skip.
 
 ---
 
