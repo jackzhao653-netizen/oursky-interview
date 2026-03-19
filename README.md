@@ -1,9 +1,9 @@
-# Oursky Planner
+# Todo
 
 A calendar-first todo planner with intelligent daily prioritization.
 
 ## Live Demo
-**https://oursky-interview.vercel.app**
+**https://oursky-interview.vercel.app** (current deployment URL; Vercel project/domain still use the old slug)
 
 ## Features
 

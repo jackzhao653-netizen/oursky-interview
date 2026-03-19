@@ -240,7 +240,7 @@ assert(!smokeTodos.some((event) => event.id === `${runId}-delete`), "Deleted tod
 const homepage = await fetch(baseUrl)
 const homepageHtml = await homepage.text()
 assert(homepage.ok, "Homepage request failed")
-assert(homepageHtml.includes("Oursky Planner"), "Homepage content did not load correctly")
+assert(homepageHtml.includes("Todo"), "Homepage content did not load correctly")
 
 console.log(`Smoke test passed against ${baseUrl}`)
 console.log(`Created ${smokeTodos.length} retained sample todos with run id ${runId}`)

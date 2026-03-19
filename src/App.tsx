@@ -1603,7 +1603,7 @@ function App() {
         <div className="wrap">
           <div className="top">
             <div className="brand">
-              <img src="/oursky-logo.svg" alt="Oursky" className="brand-logo" />
+              <img src="/oursky-logo.svg" alt="Todo" className="brand-logo" />
               <p className="brand-copy">
                 Calendar-first task control with focused daily execution.
               </p>
